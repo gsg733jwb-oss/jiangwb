@@ -12,6 +12,8 @@ const DAY_META = [
 
 let trip = null;
 let currentDayIdx = 0;
+let manualRouteIdx = null;
+let lastRouteKey = '';
 let doneSet = new Set(JSON.parse(localStorage.getItem('kl-done') || '[]'));
 let prepSet = new Set(JSON.parse(localStorage.getItem('kl-prep') || '[]'));
 
@@ -146,6 +148,8 @@ function renderDayBar() {
   bar.querySelectorAll('.day-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       currentDayIdx = +btn.dataset.idx;
+      manualRouteIdx = null;
+      lastRouteKey = '';
       renderFlow();
       renderDayBar();
     });
@@ -224,8 +228,26 @@ function renderFlow() {
 
   if (currentIdx >= 0) {
     const el = document.getElementById(`item-${currentIdx}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
+
+  const routeFrom = manualRouteIdx != null ? manualRouteIdx : (currentIdx >= 0 ? currentIdx : 0);
+  const routeKey = `${meta.key}::${routeFrom}`;
+  if (typeof updateFlowRoute === 'function' && routeKey !== lastRouteKey) {
+    lastRouteKey = routeKey;
+    updateFlowRoute(items, routeFrom);
+  }
+
+  tl.querySelectorAll('.t-item').forEach((el) => {
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.done-btn')) return;
+      manualRouteIdx = +el.dataset.idx;
+      lastRouteKey = '';
+      updateFlowRoute(items, manualRouteIdx);
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  });
 }
 
 function renderOverview() {
@@ -348,8 +370,14 @@ function switchView(view) {
   document.querySelectorAll('.tab').forEach((t) => {
     t.classList.toggle('active', t.dataset.view === view);
   });
-  if (view === 'livemap' && typeof ensureMapInit === 'function') {
-    ensureMapInit();
+  if (view === 'flow' && typeof initFlowMap === 'function') {
+    initFlowMap().then(() => {
+      const meta = DAY_META[currentDayIdx];
+      const items = trip?.days[meta.key] || [];
+      if (items.length && typeof updateFlowRoute === 'function') {
+        updateFlowRoute(items, manualRouteIdx ?? 0);
+      }
+    });
   }
 }
 
@@ -382,13 +410,8 @@ async function init() {
     tab.addEventListener('click', () => switchView(tab.dataset.view));
   });
 
-  const mapFilter = document.getElementById('map-day-filter');
-  if (mapFilter) {
-    const meta = DAY_META[detectCurrentDay()];
-    if (meta) mapFilter.value = `${+meta.date.slice(5, 7)}/${+meta.date.slice(8, 10)}`;
-  }
-
   document.getElementById('live-mode').addEventListener('change', () => {
+    manualRouteIdx = null;
     renderFlow();
     renderDayBar();
   });

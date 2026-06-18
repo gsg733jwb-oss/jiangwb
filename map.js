@@ -1,180 +1,227 @@
-/** Interactive map: trip POIs + user geolocation (Leaflet + OSM) */
+/** Route map: current schedule stop → next stop (no GPS) */
 const MAP_TYPE_COLORS = {
-  机场: '#6366f1', 酒店: '#a855f7', 景点: '#22c55e', 餐饮: '#f97316',
-  乐园: '#06b6d4', 购物: '#eab308',
+  交通: '#6366f1', 酒店: '#a855f7', 景点: '#22c55e', 餐饮: '#f97316',
+  乐园: '#06b6d4', 购物: '#eab308', 休闲: '#94a3b8', 步行: '#94a3b8',
 };
 
 let mapInstance = null;
-let userMarker = null;
-let userCircle = null;
-let poiLayer = null;
 let placesData = [];
-let watchId = null;
+let routeLayer = null;
+let markersLayer = null;
 
 function assetUrl(path) {
-  const base = document.querySelector('base')?.href || '';
-  return new URL(path, base || window.location.href).href;
+  return new URL(path, window.location.href).href;
 }
 
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const p = Math.PI / 180;
-  const a = Math.sin((lat2 - lat1) * p / 2) ** 2
-    + Math.cos(lat1 * p) * Math.cos(lat2 * p) * Math.sin((lon2 - lon1) * p / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
+function resolvePlace(item) {
+  if (!item || !placesData.length) return null;
+  const act = String(item['活动/站点'] || item['活动/分区'] || '');
+  const loc = String(item['地点/地址'] || item['地点'] || '');
+  const text = `${act} ${loc}`.toLowerCase();
+  if (act.includes('━━') || act.trim().startsWith('→')) return null;
+
+  let best = null;
+  let bestScore = 0;
+  for (const p of placesData) {
+    for (const kw of p.keywords || []) {
+      if (text.includes(kw.toLowerCase())) {
+        const score = kw.length;
+        if (score > bestScore) {
+          bestScore = score;
+          best = p;
+        }
+      }
+    }
+  }
+  return best;
 }
 
-function poiIcon(type, isToday) {
-  const color = MAP_TYPE_COLORS[type] || '#3b82f6';
-  const ring = isToday ? '#22c55e' : color;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
-    <path fill="${color}" stroke="${ring}" stroke-width="2" d="M14 0C6.3 0 0 6.3 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.3 21.7 0 14 0z"/>
-    <circle cx="14" cy="14" r="6" fill="#fff"/>
+function findLeg(items, fromIdx) {
+  let from = null;
+  let fromI = fromIdx;
+  for (let i = fromIdx; i >= 0; i--) {
+    const p = resolvePlace(items[i]);
+    if (p) { from = p; fromI = i; break; }
+  }
+  if (!from) return null;
+
+  let to = null;
+  let toI = -1;
+  for (let i = fromI + 1; i < items.length; i++) {
+    const p = resolvePlace(items[i]);
+    if (p && p.id !== from.id) { to = p; toI = i; break; }
+  }
+  return to ? { from, to, fromI, toI } : null;
+}
+
+function pinIcon(color, label) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 32 40">
+    <path fill="${color}" stroke="#fff" stroke-width="2" d="M16 0C7.2 0 0 7.2 0 16c0 12 16 24 16 24s16-12 16-24C32 7.2 24.8 0 16 0z"/>
+    <text x="16" y="20" text-anchor="middle" fill="#fff" font-size="11" font-weight="bold">${label}</text>
   </svg>`;
   return L.divIcon({
     html: svg,
-    className: 'poi-pin',
-    iconSize: [28, 36],
-    iconAnchor: [14, 36],
-    popupAnchor: [0, -34],
+    className: 'route-pin',
+    iconSize: [32, 40],
+    iconAnchor: [16, 40],
+    popupAnchor: [0, -38],
   });
 }
 
-function userIcon() {
-  return L.divIcon({
-    className: 'user-pin',
-    html: '<div class="user-dot"></div>',
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-  });
+function routeProfile(item) {
+  const t = String(item?.['交通'] || item?.['类型'] || '');
+  if (/步行|walk/i.test(t)) return 'foot';
+  return 'driving';
 }
 
-function filterDay() {
-  const sel = document.getElementById('map-day-filter');
-  return sel ? sel.value : 'all';
+async function fetchOsrmRoute(from, to, profile) {
+  const url = `https://router.project-osrm.org/route/v1/${profile}/${from.lng},${from.lat};${to.lng},${to.lat}?overview=full&geometries=geojson`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.code !== 'Ok' || !data.routes?.[0]) return null;
+    const r = data.routes[0];
+    return {
+      coords: r.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
+      distance: r.distance,
+      duration: r.duration,
+    };
+  } catch {
+    return null;
+  }
 }
 
-function placeMatchesDay(place, dayFilter) {
-  if (dayFilter === 'all') return true;
-  return String(place.day).includes(dayFilter);
+function straightRoute(from, to) {
+  return { coords: [[from.lat, from.lng], [to.lat, to.lng]], distance: 0, duration: 0 };
 }
 
-function renderPois() {
-  if (!mapInstance || !poiLayer) return;
-  poiLayer.clearLayers();
-  const dayFilter = filterDay();
-  const today = typeof klDateYmd === 'function' ? klDateYmd() : '';
-  const todayShort = today ? `${+today.slice(5, 7)}/${+today.slice(8, 10)}` : '';
-
-  placesData.forEach((p) => {
-    if (!placeMatchesDay(p, dayFilter)) return;
-    const isToday = todayShort && String(p.day).includes(todayShort);
-    const m = L.marker([p.lat, p.lng], { icon: poiIcon(p.type, isToday) });
-    m.bindPopup(`
-      <strong>${p.name}</strong><br>
-      <span style="color:#666">${p.type} · ${p.day}</span><br>
-      ${p.time ? `时段：${p.time}<br>` : ''}
-      <a href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}" target="_blank" rel="noopener">导航到此</a>
-    `);
-    poiLayer.addLayer(m);
-  });
+function formatDist(m) {
+  if (!m) return '';
+  return m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`;
 }
 
-function updateUserPosition(lat, lng, accuracy) {
+function formatDur(s) {
+  if (!s) return '';
+  const m = Math.round(s / 60);
+  return m < 60 ? `约${m}分钟` : `约${Math.floor(m / 60)}小时${m % 60}分`;
+}
+
+function setRouteStatus(html) {
+  const el = document.getElementById('route-status');
+  if (el) el.innerHTML = html;
+}
+
+async function drawLeg(items, fromIdx) {
   if (!mapInstance) return;
-  const status = document.getElementById('geo-status');
-  if (status) {
-    status.textContent = `已定位 · 精度约 ${Math.round(accuracy)}m`;
-    status.className = 'geo-status ok';
-  }
+  routeLayer.clearLayers();
+  markersLayer.clearLayers();
 
-  if (!userMarker) {
-    userMarker = L.marker([lat, lng], { icon: userIcon(), zIndexOffset: 1000 }).addTo(mapInstance);
-    userMarker.bindPopup('<strong>我的位置</strong>');
-  } else {
-    userMarker.setLatLng([lat, lng]);
-  }
-
-  if (userCircle) userCircle.setLatLng([lat, lng]).setRadius(accuracy);
-  else userCircle = L.circle([lat, lng], { radius: accuracy, color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.12, weight: 1 }).addTo(mapInstance);
-
-  updateNearest(lat, lng);
-}
-
-function updateNearest(lat, lng) {
-  const el = document.getElementById('nearest-poi');
-  if (!el || !placesData.length) return;
-  let best = null;
-  let bestD = Infinity;
-  placesData.forEach((p) => {
-    const d = haversineKm(lat, lng, p.lat, p.lng);
-    if (d < bestD) { bestD = d; best = p; }
-  });
-  if (best) {
-    el.innerHTML = `距最近行程点 <strong>${best.name}</strong> 约 <strong>${bestD < 1 ? Math.round(bestD * 1000) + 'm' : bestD.toFixed(1) + 'km'}</strong>`;
-  }
-}
-
-function startGeolocation() {
-  const status = document.getElementById('geo-status');
-  if (!navigator.geolocation) {
-    if (status) { status.textContent = '浏览器不支持定位'; status.className = 'geo-status err'; }
+  const leg = findLeg(items, fromIdx);
+  if (!leg) {
+    setRouteStatus('<span class="muted">当日行程已结束，或暂无下一段路线</span>');
+    highlightTimelineLeg(-1, -1);
     return;
   }
-  if (status) { status.textContent = '正在获取位置…'; status.className = 'geo-status'; }
 
-  const opts = { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 };
-  const onPos = (pos) => updateUserPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
-  const onErr = (err) => {
-    if (status) {
-      status.textContent = err.code === 1 ? '请允许定位权限（HTTPS 页面）' : '定位失败，请重试';
-      status.className = 'geo-status err';
-    }
-  };
+  highlightTimelineLeg(leg.fromI, leg.toI);
 
-  navigator.geolocation.getCurrentPosition(onPos, onErr, opts);
-  if (watchId != null) navigator.geolocation.clearWatch(watchId);
-  watchId = navigator.geolocation.watchPosition(onPos, () => {}, opts);
+  const fromItem = items[leg.fromI];
+  const profile = routeProfile(fromItem);
+  setRouteStatus('⏳ 正在规划路线…');
+
+  let route = await fetchOsrmRoute(leg.from, leg.to, profile);
+  if (!route) route = straightRoute(leg.from, leg.to);
+
+  const line = L.polyline(route.coords, {
+    color: '#3b82f6',
+    weight: 5,
+    opacity: 0.85,
+    dashArray: profile === 'foot' ? '8 6' : null,
+  }).addTo(routeLayer);
+
+  L.marker([leg.from.lat, leg.from.lng], { icon: pinIcon('#22c55e', '现') })
+    .bindPopup(`<strong>当前</strong><br>${leg.from.name}`)
+    .addTo(markersLayer);
+
+  L.marker([leg.to.lat, leg.to.lng], { icon: pinIcon('#f59e0b', '下') })
+    .bindPopup(`<strong>下一站</strong><br>${leg.to.name}<br>
+      <a href="https://www.google.com/maps/dir/?api=1&destination=${leg.to.lat},${leg.to.lng}" target="_blank" rel="noopener">Google 导航</a>`)
+    .addTo(markersLayer);
+
+  const dist = formatDist(route.distance);
+  const dur = formatDur(route.duration);
+  const mode = profile === 'foot' ? '步行' : '驾车';
+  setRouteStatus(
+    `<strong>${leg.from.name}</strong> → <strong>${leg.to.name}</strong>
+     <span class="route-meta">${mode}${dist ? ` · ${dist}` : ''}${dur ? ` · ${dur}` : ''}</span>`
+  );
+
+  mapInstance.fitBounds(line.getBounds(), { padding: [48, 48], maxZoom: 15 });
 }
 
-function fitAllBounds() {
-  if (!mapInstance) return;
-  const bounds = L.latLngBounds([[3.05, 101.58], [3.18, 101.72]]);
-  if (userMarker) bounds.extend(userMarker.getLatLng());
-  poiLayer.eachLayer((l) => { if (l.getLatLng) bounds.extend(l.getLatLng()); });
-  mapInstance.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
-}
-
-async function ensureMapInit() {
+async function initFlowMap() {
   if (mapInstance) {
-    setTimeout(() => mapInstance.invalidateSize(), 100);
+    setTimeout(() => mapInstance.invalidateSize(), 120);
     return;
+  }
+
+  const container = document.getElementById('trip-map');
+  if (!container || container.offsetHeight < 10) {
+    await new Promise((r) => requestAnimationFrame(r));
   }
 
   try {
     const res = await fetch(assetUrl('data/places.json'));
     placesData = await res.json();
   } catch {
-    document.getElementById('geo-status').textContent = '无法加载地点数据';
+    setRouteStatus('<span class="err">无法加载地点数据</span>');
     return;
   }
 
-  mapInstance = L.map('trip-map', { zoomControl: true }).setView([3.14, 101.70], 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  mapInstance = L.map('trip-map', {
+    zoomControl: true,
+    preferCanvas: true,
+  }).setView([3.14, 101.70], 12);
+
+  // OpenStreetMap 在国内常无法访问，优先用 Esri 瓦片
+  const esri = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    { attribution: 'Tiles &copy; Esri', maxZoom: 18 }
+  );
+  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap',
     maxZoom: 19,
-  }).addTo(mapInstance);
-
-  poiLayer = L.layerGroup().addTo(mapInstance);
-  renderPois();
-
-  document.getElementById('map-day-filter')?.addEventListener('change', renderPois);
-  document.getElementById('btn-locate')?.addEventListener('click', () => {
-    startGeolocation();
-    if (userMarker) mapInstance.setView(userMarker.getLatLng(), 16, { animate: true });
+    subdomains: 'abc',
   });
-  document.getElementById('btn-fit')?.addEventListener('click', fitAllBounds);
 
-  startGeolocation();
-  setTimeout(() => mapInstance.invalidateSize(), 200);
+  esri.addTo(mapInstance);
+  let osmTried = false;
+  esri.on('tileerror', () => {
+    if (!osmTried) {
+      osmTried = true;
+      mapInstance.removeLayer(esri);
+      osm.addTo(mapInstance);
+    }
+  });
+
+  routeLayer = L.layerGroup().addTo(mapInstance);
+  markersLayer = L.layerGroup().addTo(mapInstance);
+
+  const fixSize = () => mapInstance?.invalidateSize();
+  setTimeout(fixSize, 100);
+  setTimeout(fixSize, 400);
+  window.addEventListener('resize', fixSize);
+}
+
+async function updateFlowRoute(items, fromIdx) {
+  if (!mapInstance) await initFlowMap();
+  await drawLeg(items, fromIdx);
+}
+
+function highlightTimelineLeg(fromI, toI) {
+  document.querySelectorAll('.t-item').forEach((el) => {
+    el.classList.remove('leg-from', 'leg-to');
+  });
+  if (fromI >= 0) document.getElementById(`item-${fromI}`)?.classList.add('leg-from');
+  if (toI >= 0) document.getElementById(`item-${toI}`)?.classList.add('leg-to');
 }

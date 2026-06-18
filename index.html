@@ -24,8 +24,7 @@
   </header>
 
   <nav class="tabs" id="main-tabs">
-    <button class="tab active" data-view="flow">行程流程</button>
-    <button class="tab" data-view="livemap">地图</button>
+    <button class="tab active" data-view="flow">行程+地图</button>
     <button class="tab" data-view="overview">总览</button>
     <button class="tab" data-view="food">美食</button>
     <button class="tab" data-view="list">清单</button>
@@ -50,31 +49,18 @@
           <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
         </div>
       </div>
-      <div class="timeline" id="timeline"></div>
-    </section>
-
-    <!-- 交互地图 -->
-    <section id="view-livemap" class="view">
-      <div class="map-toolbar">
-        <div>
-          <h2>行程地图</h2>
-          <p class="muted">蓝点 = 你的位置 · 图钉 = 行程地点</p>
+      <div class="flow-split">
+        <div class="flow-panel">
+          <div class="timeline" id="timeline"></div>
         </div>
-        <div class="map-controls">
-          <select id="map-day-filter" class="map-select">
-            <option value="all">全部天数</option>
-            <option value="7/12">Day 1 · 7/12</option>
-            <option value="7/13">Day 2 · 7/13</option>
-            <option value="7/14">Day 3 · 7/14</option>
-            <option value="7/15">Day 4 · 7/15</option>
-          </select>
-          <button type="button" class="btn-map" id="btn-locate">定位到我</button>
-          <button type="button" class="btn-map" id="btn-fit">看全行程</button>
+        <div class="map-panel">
+          <div class="map-panel-head">
+            <h3>当前 → 下一站</h3>
+            <p id="route-status" class="route-status muted">加载路线…</p>
+          </div>
+          <div id="trip-map" class="trip-map"></div>
         </div>
       </div>
-      <p id="geo-status" class="geo-status">等待定位…</p>
-      <p id="nearest-poi" class="nearest-poi muted"></p>
-      <div id="trip-map" class="trip-map"></div>
     </section>
 
     <!-- 总览 -->
