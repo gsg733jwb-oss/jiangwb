@@ -1,0 +1,398 @@
+const TYPE_COLORS = {
+  餐饮: '#f97316', 交通: '#3b82f6', 景点: '#22c55e', 酒店: '#a855f7',
+  乐园: '#06b6d4', 购物: '#eab308', 休闲: '#94a3b8', 项目: '#94a3b8', 步行: '#94a3b8',
+};
+
+const DAY_META = [
+  { key: '1-7月12日', num: 1, date: '2026-07-12', label: '7/12 周日' },
+  { key: '2-7月13日', num: 2, date: '2026-07-13', label: '7/13 周一' },
+  { key: '3-7月14日', num: 3, date: '2026-07-14', label: '7/14 周二' },
+  { key: '4-7月15日', num: 4, date: '2026-07-15', label: '7/15 周三' },
+];
+
+let trip = null;
+let currentDayIdx = 0;
+let doneSet = new Set(JSON.parse(localStorage.getItem('kl-done') || '[]'));
+let prepSet = new Set(JSON.parse(localStorage.getItem('kl-prep') || '[]'));
+
+function saveDone() {
+  localStorage.setItem('kl-done', JSON.stringify([...doneSet]));
+}
+function savePrep() {
+  localStorage.setItem('kl-prep', JSON.stringify([...prepSet]));
+}
+
+function itemId(dayKey, idx) {
+  return `${dayKey}::${idx}`;
+}
+
+function klNow() {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kuala_Lumpur' }));
+}
+
+function klDateYmd() {
+  const n = klNow();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+}
+
+function parseTimeRange(str, refDate) {
+  if (!str) return null;
+  const s = String(str).trim();
+  const range = s.match(/^(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})$/);
+  if (range) {
+    const start = new Date(refDate);
+    start.setHours(+range[1], +range[2], 0, 0);
+    const end = new Date(refDate);
+    end.setHours(+range[3], +range[4], 0, 0);
+    return { start, end };
+  }
+  const single = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (single) {
+    const t = new Date(refDate);
+    t.setHours(+single[1], +single[2], 0, 0);
+    return { start: t, end: new Date(t.getTime() + 30 * 60000) };
+  }
+  return null;
+}
+
+function getRow(item) {
+  const act = item['活动/站点'] || item['活动/分区'] || '';
+  const loc = item['地点/地址'] || item['地点'] || '';
+  const type = item['类型'] || '';
+  const time = item['时段'] || '';
+  const transport = item['交通'] || '';
+  const duration = item['时长'] || '';
+  const cost = item['费用(RM)'] || '';
+  const detail = item['详细说明'] || '';
+  const rec = item['推荐/必做'] || '';
+  const note = item['注意事项'] || '';
+  return { act, loc, type, time, transport, duration, cost, detail, rec, note };
+}
+
+function isDivider(item) {
+  const act = item['活动/站点'] || item['活动/分区'] || '';
+  return act && String(act).includes('━━');
+}
+
+function isSubItem(item) {
+  const act = item['活动/站点'] || item['活动/分区'] || '';
+  return String(act).trim().startsWith('→');
+}
+
+function detectCurrentDay() {
+  const ymd = klDateYmd();
+  const idx = DAY_META.findIndex((d) => d.date === ymd);
+  return idx >= 0 ? idx : 0;
+}
+
+function getLiveStatus(dayKey, items) {
+  const live = document.getElementById('live-mode').checked;
+  const meta = DAY_META.find((d) => d.key === dayKey);
+  if (!live || !meta) return { currentIdx: -1, progress: 0 };
+
+  const now = klNow();
+  const ref = new Date(meta.date + 'T00:00:00');
+  if (klDateYmd() !== meta.date) {
+    const tripStart = new Date('2026-07-12');
+    const tripEnd = new Date('2026-07-15T23:59:59');
+    if (now < tripStart) return { currentIdx: -1, progress: 0 };
+    if (now > tripEnd) return { currentIdx: items.length, progress: 100 };
+    return { currentIdx: -1, progress: 0 };
+  }
+
+  let currentIdx = -1;
+  let lastEnd = ref;
+  const actionable = [];
+
+  items.forEach((item, i) => {
+    if (isDivider(item)) return;
+    const { time } = getRow(item);
+    const range = parseTimeRange(time, ref);
+    if (range) {
+      actionable.push({ i, ...range });
+      if (now >= range.start && now < range.end) currentIdx = i;
+      if (now >= range.end) lastEnd = range.end;
+    }
+  });
+
+  if (currentIdx < 0 && actionable.length) {
+    const future = actionable.find((a) => now < a.start);
+    const past = [...actionable].reverse().find((a) => now >= a.end);
+    if (future && !past) currentIdx = future.i;
+    else if (past) currentIdx = past.i;
+  }
+
+  const dayStart = actionable[0]?.start || ref;
+  const dayEnd = actionable[actionable.length - 1]?.end || new Date(ref.getTime() + 12 * 3600000);
+  const total = dayEnd - dayStart;
+  const progress = total > 0 ? Math.min(100, Math.max(0, ((now - dayStart) / total) * 100)) : 0;
+
+  return { currentIdx, progress: Math.round(progress) };
+}
+
+function renderDayBar() {
+  const bar = document.getElementById('day-bar');
+  const todayYmd = klDateYmd();
+  bar.innerHTML = DAY_META.map((d, i) => {
+    const ov = trip.overview.find((o) => o['日期'] === d.date);
+    const isToday = d.date === todayYmd;
+    return `<button class="day-btn ${i === currentDayIdx ? 'active' : ''} ${isToday ? 'is-today' : ''}" data-idx="${i}">
+      <span class="d-num">Day ${d.num}</span>
+      <span class="d-date">${d.label}</span>
+      ${ov ? `<span class="d-date">${ov['主题'] || ''}</span>` : ''}
+    </button>`;
+  }).join('');
+
+  bar.querySelectorAll('.day-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      currentDayIdx = +btn.dataset.idx;
+      renderFlow();
+      renderDayBar();
+    });
+  });
+}
+
+function renderFlow() {
+  const meta = DAY_META[currentDayIdx];
+  const items = trip.days[meta.key] || [];
+  const ov = trip.overview.find((o) => o['日期'] === meta.date);
+  const { currentIdx, progress } = getLiveStatus(meta.key, items);
+
+  document.getElementById('day-heading').textContent = `Day ${meta.num} · ${meta.label}`;
+  document.getElementById('day-subtitle').textContent = ov
+    ? `${ov['住宿'] || ''} · ${ov['核心活动'] || ''}`
+    : '';
+  document.getElementById('progress-fill').style.width = progress + '%';
+  document.getElementById('progress-text').textContent = progress + '%';
+
+  const tl = document.getElementById('timeline');
+  let html = '';
+  let actionIdx = 0;
+
+  items.forEach((item, i) => {
+    if (isDivider(item)) {
+      const act = item['活动/站点'] || item['活动/分区'] || '';
+      html += `<div class="t-divider">${esc(act.replace(/━/g, '').trim())}</div>`;
+      return;
+    }
+
+    const r = getRow(item);
+    const id = itemId(meta.key, i);
+    const done = doneSet.has(id);
+    const isNow = i === currentIdx && document.getElementById('live-mode').checked;
+    const isStar = (r.rec && String(r.rec).includes('★')) || (r.rec && String(r.rec).includes('必'));
+    const sub = isSubItem(item);
+    const color = TYPE_COLORS[r.type] || '#64748b';
+
+    html += `<div class="t-item ${isNow ? 'now' : ''} ${done ? 'done' : ''} ${sub ? 'sub' : ''}" data-idx="${i}" id="item-${i}">
+      <div class="t-dot" style="border-color:${color}"></div>
+      <div class="t-card ${isStar ? 'highlight' : ''}">
+        <div class="t-top">
+          <span class="t-time">${esc(r.time)}</span>
+          <span class="t-badge" style="background:${color}22;color:${color}">${esc(r.type)}</span>
+          ${isNow ? '<span class="t-badge now-label">进行中</span>' : ''}
+          ${isStar ? '<span class="t-badge star">推荐</span>' : ''}
+        </div>
+        <div class="t-title">${esc(r.act)}</div>
+        ${r.loc ? `<div class="t-loc">📍 ${esc(r.loc)}</div>` : ''}
+        <div class="t-meta">
+          ${r.transport && r.transport !== '—' ? `<span>🚗 ${esc(r.transport)}</span>` : ''}
+          ${r.duration && r.duration !== '—' ? `<span>⏱ ${esc(r.duration)}</span>` : ''}
+          ${r.cost && r.cost !== '—' ? `<span>💰 ${esc(r.cost)}</span>` : ''}
+        </div>
+        ${r.detail ? `<div class="t-note">${esc(r.detail)}</div>` : ''}
+        ${r.note ? `<div class="t-note" style="opacity:0.85">⚠️ ${esc(r.note)}</div>` : ''}
+        <div class="t-actions">
+          <button class="btn-sm done-btn ${done ? 'is-done' : ''}" data-id="${id}">${done ? '✓ 已完成' : '标记完成'}</button>
+        </div>
+      </div>
+    </div>`;
+    actionIdx++;
+  });
+
+  tl.innerHTML = html;
+
+  tl.querySelectorAll('.done-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      if (doneSet.has(id)) doneSet.delete(id);
+      else doneSet.add(id);
+      saveDone();
+      renderFlow();
+    });
+  });
+
+  if (currentIdx >= 0) {
+    const el = document.getElementById(`item-${currentIdx}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function renderOverview() {
+  const el = document.getElementById('overview-cards');
+  el.innerHTML = trip.overview
+    .filter((o) => o['日期'] !== '—')
+    .map((o) => `<div class="card">
+      <h3>${esc(o['日期'])} ${esc(o['星期'])} · ${esc(o['主题'])}</h3>
+      <p><strong>住宿</strong> ${esc(o['住宿'])}</p>
+      <p style="margin-top:0.35rem">${esc(o['核心活动'])}</p>
+      <span class="tag">${esc(o['重要提醒'])}</span>
+    </div>`).join('');
+}
+
+function renderFood() {
+  const cols = ['日期', '餐次', '餐厅', '必点', '人均RM', '说明'];
+  document.getElementById('food-table').innerHTML = tableHtml(trip.foodDist, cols);
+
+  document.getElementById('restaurant-cards').innerHTML = trip.restaurants
+    .filter((r) => r['安排日'] && !String(r['安排日']).includes('备选'))
+    .map((r) => `<div class="card">
+      <h3>${esc(r['餐厅'])}</h3>
+      <p>${esc(r['类型'])} · ${esc(r['安排日'])} · RM ${esc(r['人均(RM)'])}</p>
+      <p style="margin-top:0.35rem">📍 ${esc(r['地址'])}</p>
+      <p style="margin-top:0.35rem">必点：${esc(r['必点菜品'])}</p>
+    </div>`).join('');
+}
+
+function renderMap() {
+  const cols = ['序号', '地点名称', '类型', '备注', '优先级', '安排日期', '时段'];
+  document.getElementById('map-table').innerHTML = tableHtml(trip.mapList, cols);
+}
+
+function renderBudget() {
+  const rows = trip.budget.filter((b) => b['日期'] !== '全程');
+  const summary = trip.budget.find((b) => b['日期'] === '全程');
+  const byDate = {};
+  rows.forEach((r) => {
+    const d = r['日期'];
+    if (!byDate[d]) byDate[d] = { min: 0, max: 0 };
+    const lo = +r['费用下限(RM)'] || 0;
+    const hi = +r['费用上限(RM)'] || 0;
+    if (r['人均/合计'] === '人均') {
+      byDate[d].min += lo;
+      byDate[d].max += hi;
+    }
+  });
+
+  document.getElementById('budget-summary').innerHTML = `
+    <div class="stat-card">
+      <div class="label">全程预估（人均）</div>
+      <div class="value">RM ${summary ? summary['费用下限(RM)'] : '—'}–${summary ? summary['费用上限(RM)'] : '—'}</div>
+      <div class="sub">${summary ? esc(summary['备注']) : ''}</div>
+    </div>
+    ${Object.entries(byDate).map(([d, v]) => `
+      <div class="stat-card">
+        <div class="label">${esc(d)} 餐饮门票等</div>
+        <div class="value">RM ${v.min}–${v.max}</div>
+        <div class="sub">人均项合计</div>
+      </div>`).join('')}
+  `;
+
+  const cols = ['日期', '类别', '项目', '费用下限(RM)', '费用上限(RM)', '人均/合计', '备注'];
+  document.getElementById('budget-table').innerHTML = tableHtml(trip.budget, cols);
+}
+
+function renderPrep() {
+  const groups = {};
+  trip.prep.forEach((p) => {
+    const cat = p['类别'] || '其他';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(p);
+  });
+
+  document.getElementById('prep-groups').innerHTML = Object.entries(groups)
+    .map(([cat, items]) => `
+      <div class="prep-group">
+        <h3>${esc(cat)}</h3>
+        ${items.map((p) => {
+          const id = `prep::${p['事项/物品']}`;
+          const checked = prepSet.has(id);
+          const must = p['必备'] === '是';
+          return `<div class="prep-item ${must ? 'must' : ''}">
+            <input type="checkbox" id="${esc(id)}" data-id="${esc(id)}" ${checked ? 'checked' : ''} />
+            <label for="${esc(id)}">
+              ${esc(p['事项/物品'])}
+              <div class="when">${esc(p['哪一天'])}${p['备注'] ? ' · ' + esc(p['备注']) : ''}</div>
+            </label>
+          </div>`;
+        }).join('')}
+      </div>`).join('');
+
+  document.querySelectorAll('#prep-groups input').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) prepSet.add(cb.dataset.id);
+      else prepSet.delete(cb.dataset.id);
+      savePrep();
+    });
+  });
+}
+
+function tableHtml(rows, cols) {
+  return `<table><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map((r) => `<tr>${cols.map((c) => `<td>${esc(r[c] ?? '—')}</td>`).join('')}</tr>`).join('')}
+    </tbody></table>`;
+}
+
+function esc(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function switchView(view) {
+  document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
+  document.getElementById(`view-${view}`).classList.add('active');
+  document.querySelectorAll('.tab').forEach((t) => {
+    t.classList.toggle('active', t.dataset.view === view);
+  });
+}
+
+function updateClock() {
+  const now = klNow();
+  const opts = { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+  document.getElementById('live-clock').textContent =
+    '吉隆坡 ' + now.toLocaleString('zh-CN', opts);
+
+  if (document.getElementById('view-flow').classList.contains('active')) {
+    renderFlow();
+    renderDayBar();
+  }
+}
+
+async function init() {
+  try {
+    const res = await fetch('data/trip.json');
+    trip = await res.json();
+  } catch {
+    document.querySelector('.container').innerHTML =
+      '<p style="color:#f87171;padding:2rem">无法加载数据。请用本地服务器打开（见 README）。</p>';
+    return;
+  }
+
+  document.getElementById('trip-title').textContent = trip.title;
+  currentDayIdx = detectCurrentDay();
+
+  document.querySelectorAll('.tab').forEach((tab) => {
+    tab.addEventListener('click', () => switchView(tab.dataset.view));
+  });
+
+  document.getElementById('live-mode').addEventListener('change', () => {
+    renderFlow();
+    renderDayBar();
+  });
+
+  renderDayBar();
+  renderFlow();
+  renderOverview();
+  renderFood();
+  renderMap();
+  renderBudget();
+  renderPrep();
+  updateClock();
+  setInterval(updateClock, 30000);
+}
+
+init();

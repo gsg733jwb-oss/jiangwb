@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>吉隆坡之旅 · 2026.7.12–15</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <p class="eyebrow">Kuala Lumpur Travel Guide</p>
+      <h1 id="trip-title">吉隆坡之旅</h1>
+      <p class="subtitle">2026年7月12日 – 15日 · 4天3晚</p>
+      <div class="hero-meta">
+        <span class="pill" id="live-clock">—</span>
+        <label class="toggle-live">
+          <input type="checkbox" id="live-mode" checked />
+          <span>实时行程模式</span>
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs" id="main-tabs">
+    <button class="tab active" data-view="flow">行程流程</button>
+    <button class="tab" data-view="overview">总览</button>
+    <button class="tab" data-view="food">美食</button>
+    <button class="tab" data-view="map">地图清单</button>
+    <button class="tab" data-view="budget">预算</button>
+    <button class="tab" data-view="prep">行前准备</button>
+  </nav>
+
+  <main class="container">
+    <!-- 行程流程 -->
+    <section id="view-flow" class="view active">
+      <div class="day-bar" id="day-bar"></div>
+      <div class="flow-header">
+        <div>
+          <h2 id="day-heading">Day 1</h2>
+          <p id="day-subtitle" class="muted"></p>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-label">
+            <span>当日进度</span>
+            <span id="progress-text">0%</span>
+          </div>
+          <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+        </div>
+      </div>
+      <div class="timeline" id="timeline"></div>
+    </section>
+
+    <!-- 总览 -->
+    <section id="view-overview" class="view">
+      <h2>行程总览</h2>
+      <div class="cards" id="overview-cards"></div>
+    </section>
+
+    <!-- 美食 -->
+    <section id="view-food" class="view">
+      <h2>美食安排</h2>
+      <div class="table-wrap" id="food-table"></div>
+      <h3 class="section-sub">餐厅详情</h3>
+      <div class="cards" id="restaurant-cards"></div>
+    </section>
+
+    <!-- 地图 -->
+    <section id="view-map" class="view">
+      <h2>地图清单</h2>
+      <div class="table-wrap" id="map-table"></div>
+    </section>
+
+    <!-- 预算 -->
+    <section id="view-budget" class="view">
+      <h2>预算明细</h2>
+      <div class="budget-summary" id="budget-summary"></div>
+      <div class="table-wrap" id="budget-table"></div>
+    </section>
+
+    <!-- 行前 -->
+    <section id="view-prep" class="view">
+      <h2>行前准备</h2>
+      <div id="prep-groups"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>数据来自 Excel 行程表 · 完成状态保存在本机浏览器</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
