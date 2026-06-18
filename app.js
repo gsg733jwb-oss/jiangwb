@@ -348,6 +348,9 @@ function switchView(view) {
   document.querySelectorAll('.tab').forEach((t) => {
     t.classList.toggle('active', t.dataset.view === view);
   });
+  if (view === 'livemap' && typeof ensureMapInit === 'function') {
+    ensureMapInit();
+  }
 }
 
 function updateClock() {
@@ -378,6 +381,12 @@ async function init() {
   document.querySelectorAll('.tab').forEach((tab) => {
     tab.addEventListener('click', () => switchView(tab.dataset.view));
   });
+
+  const mapFilter = document.getElementById('map-day-filter');
+  if (mapFilter) {
+    const meta = DAY_META[detectCurrentDay()];
+    if (meta) mapFilter.value = `${+meta.date.slice(5, 7)}/${+meta.date.slice(8, 10)}`;
+  }
 
   document.getElementById('live-mode').addEventListener('change', () => {
     renderFlow();

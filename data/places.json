@@ -1,0 +1,18 @@
+[
+  { "id": "klia", "name": "吉隆坡国际机场 KLIA", "lat": 2.7456, "lng": 101.7099, "day": "7/12·7/15", "type": "机场", "time": "14:00 / 16:00" },
+  { "id": "moxy", "name": "Moxy Kuala Lumpur Chinatown", "lat": 3.1415, "lng": 101.6978, "day": "7/12-7/13", "type": "酒店", "time": "住宿" },
+  { "id": "petaling", "name": "茨厂街市场", "lat": 3.1440, "lng": 101.6969, "day": "7/12", "type": "景点", "time": "16:08-17:03" },
+  { "id": "merdeka", "name": "独立广场", "lat": 3.1490, "lng": 101.6939, "day": "7/12", "type": "景点", "time": "17:58-18:48" },
+  { "id": "madam-kwans", "name": "Madam Kwan's Pavilion", "lat": 3.1490, "lng": 101.7128, "day": "7/12", "type": "餐饮", "time": "19:00-20:30" },
+  { "id": "pavilion", "name": "Pavilion KL", "lat": 3.1492, "lng": 101.7132, "day": "7/12·7/15", "type": "购物", "time": "20:30-21:30" },
+  { "id": "durian-bros", "name": "Durian Bros 榴莲兄弟", "lat": 3.1478, "lng": 101.7103, "day": "7/12", "type": "餐饮", "time": "21:45-22:45" },
+  { "id": "sunway-lagoon", "name": "双威水上乐园 Sunway Lagoon", "lat": 3.0699, "lng": 101.6066, "day": "7/13", "type": "乐园", "time": "10:00-18:00" },
+  { "id": "adecade", "name": "A'Decade Sunway Pyramid", "lat": 3.0722, "lng": 101.6074, "day": "7/13", "type": "餐饮", "time": "18:00-19:30" },
+  { "id": "imperial-lexis", "name": "Imperial Lexis Kuala Lumpur", "lat": 3.1512, "lng": 101.7145, "day": "7/14", "type": "酒店", "time": "住宿" },
+  { "id": "klcc-park", "name": "KLCC公园", "lat": 3.1578, "lng": 101.7113, "day": "7/14", "type": "景点", "time": "11:00-12:00" },
+  { "id": "village-park", "name": "Village Park Restaurant", "lat": 3.1308, "lng": 101.6234, "day": "7/14", "type": "餐饮", "time": "12:30-13:30" },
+  { "id": "petronas", "name": "国油双峰塔", "lat": 3.1578, "lng": 101.7120, "day": "7/14", "type": "景点", "time": "16:00-17:30" },
+  { "id": "aquaria", "name": "KLCC水族馆", "lat": 3.1540, "lng": 101.7118, "day": "7/14", "type": "景点", "time": "17:30-18:45" },
+  { "id": "feifei-crab", "name": "肥肥蟹 Fei Fei Crab", "lat": 3.1492, "lng": 101.7130, "day": "7/14", "type": "餐饮", "time": "19:00-20:30" },
+  { "id": "redai", "name": "热带 ReDai 肉骨茶", "lat": 3.1345, "lng": 101.7150, "day": "7/15", "type": "餐饮", "time": "12:00-13:15" }
+]
