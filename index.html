@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>吉隆坡之旅 · 2026.7.12–15</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -55,10 +55,16 @@
         </div>
         <div class="map-panel">
           <div class="map-panel-head">
-            <h3>当前 → 下一站</h3>
-            <p id="route-status" class="route-status muted">加载路线…</p>
+            <h3>上 · 现 · 下</h3>
+            <p id="route-status" class="route-status muted">点击左侧日程查看前后站</p>
+            <div class="map-toolbar">
+              <button type="button" class="map-btn" id="map-fit-btn" title="缩放到当前三站">适配行程</button>
+              <button type="button" class="map-btn" id="map-reset-btn" title="吉隆坡全览">全览</button>
+            </div>
           </div>
           <div id="trip-map" class="trip-map"></div>
+          <p id="map-hint" class="map-hint">点击左侧日程 · 双指/滚轮可缩放拖动地图</p>
+          <p id="map-toast" class="map-toast" aria-live="polite"></p>
         </div>
       </div>
     </section>
@@ -101,7 +107,8 @@
     <p>数据来自 Excel 行程表 · 完成状态保存在本机浏览器</p>
   </footer>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="data/trip.inline.js"></script>
+  <script src="vendor/leaflet/leaflet.js"></script>
   <script src="map.js"></script>
   <script src="app.js"></script>
 </body>

@@ -43,8 +43,12 @@ def main():
             out['days'][name.replace('Day', '').strip()] = sheet_to_dict(wb[name])
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(out, ensure_ascii=False, indent=2, default=str), encoding='utf-8')
+    text = json.dumps(out, ensure_ascii=False, indent=2, default=str)
+    OUT.write_text(text, encoding='utf-8')
+    inline = OUT.parent / 'trip.inline.js'
+    inline.write_text(f'window.__TRIP_DATA__ = {text};\n', encoding='utf-8')
     print(f'Exported → {OUT}')
+    print(f'Inline   → {inline}')
 
 
 if __name__ == '__main__':

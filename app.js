@@ -13,7 +13,6 @@ const DAY_META = [
 let trip = null;
 let currentDayIdx = 0;
 let manualRouteIdx = null;
-let lastRouteKey = '';
 let doneSet = new Set(JSON.parse(localStorage.getItem('kl-done') || '[]'));
 let prepSet = new Set(JSON.parse(localStorage.getItem('kl-prep') || '[]'));
 
@@ -149,7 +148,6 @@ function renderDayBar() {
     btn.addEventListener('click', () => {
       currentDayIdx = +btn.dataset.idx;
       manualRouteIdx = null;
-      lastRouteKey = '';
       renderFlow();
       renderDayBar();
     });
@@ -232,9 +230,7 @@ function renderFlow() {
   }
 
   const routeFrom = manualRouteIdx != null ? manualRouteIdx : (currentIdx >= 0 ? currentIdx : 0);
-  const routeKey = `${meta.key}::${routeFrom}`;
-  if (typeof updateFlowRoute === 'function' && routeKey !== lastRouteKey) {
-    lastRouteKey = routeKey;
+  if (typeof updateFlowRoute === 'function') {
     updateFlowRoute(items, routeFrom);
   }
 
@@ -243,7 +239,6 @@ function renderFlow() {
     el.addEventListener('click', (e) => {
       if (e.target.closest('.done-btn')) return;
       manualRouteIdx = +el.dataset.idx;
-      lastRouteKey = '';
       updateFlowRoute(items, manualRouteIdx);
       el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
@@ -371,13 +366,15 @@ function switchView(view) {
     t.classList.toggle('active', t.dataset.view === view);
   });
   if (view === 'flow' && typeof initFlowMap === 'function') {
-    initFlowMap().then(() => {
+    initFlowMap();
+    setTimeout(() => {
+      if (typeof invalidateFlowMap === 'function') invalidateFlowMap();
       const meta = DAY_META[currentDayIdx];
       const items = trip?.days[meta.key] || [];
       if (items.length && typeof updateFlowRoute === 'function') {
         updateFlowRoute(items, manualRouteIdx ?? 0);
       }
-    });
+    }, 80);
   }
 }
 
@@ -393,13 +390,19 @@ function updateClock() {
   }
 }
 
+async function loadTripData() {
+  if (window.__TRIP_DATA__) return window.__TRIP_DATA__;
+  const res = await fetch('data/trip.json');
+  if (!res.ok) throw new Error('fetch failed');
+  return res.json();
+}
+
 async function init() {
   try {
-    const res = await fetch('data/trip.json');
-    trip = await res.json();
+    trip = await loadTripData();
   } catch {
     document.querySelector('.container').innerHTML =
-      '<p style="color:#f87171;padding:2rem">无法加载数据。请用本地服务器打开（见 README）。</p>';
+      '<p style="color:#f87171;padding:2rem">无法加载行程数据。请确认 <code>data/trip.inline.js</code> 存在，或用本地服务器打开。</p>';
     return;
   }
 
