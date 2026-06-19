@@ -30,13 +30,16 @@ const PIN = {
 };
 
 const KL_CENTER = [3.12, 101.68];
+const IMAGE_BOUNDS = [[2.62, 101.52], [3.22, 101.78]];
 const ROLE_ANGLE = { prev: -Math.PI / 2, next: Math.PI / 6, curr: (Math.PI * 5) / 6 };
 
 let map = null;
 let markerLayer = null;
 let baseLayer = null;
+let localMapLayer = null;
 let mapReady = false;
 let lastPins = [];
+let usingLocalMap = false;
 
 function isDividerRow(item) {
   return String(item['活动/站点'] || item['活动/分区'] || '').includes('━━');
@@ -133,34 +136,53 @@ function makePinIcon(cfg) {
   });
 }
 
-function createBaseLayer() {
-  const gaode = L.tileLayer(
-    'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
-    {
-      subdomains: ['1', '2', '3', '4'],
-      maxZoom: 18,
-      attribution: '© 高德地图',
-    }
-  );
+function useLocalMap() {
+  if (!map) return;
+  usingLocalMap = true;
+  if (baseLayer && map.hasLayer(baseLayer)) {
+    map.removeLayer(baseLayer);
+    baseLayer = null;
+  }
+  if (!localMapLayer) {
+    localMapLayer = L.imageOverlay('assets/kl-map.jpg', IMAGE_BOUNDS, { opacity: 1, interactive: false });
+  }
+  if (!map.hasLayer(localMapLayer)) localMapLayer.addTo(map);
+  map.setMaxBounds(L.latLngBounds(IMAGE_BOUNDS).pad(0.02));
+}
 
+function promoteOnlineMap() {
+  if (!map || !baseLayer) return;
+  baseLayer.setOpacity(1);
+  if (localMapLayer && map.hasLayer(localMapLayer)) map.removeLayer(localMapLayer);
+  map.setMaxBounds(null);
+  usingLocalMap = false;
+}
+
+function createBaseLayer() {
   const esri = L.tileLayer(
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
     {
       maxZoom: 18,
+      opacity: 0,
       attribution: '© Esri',
+      crossOrigin: true,
     }
   );
 
-  gaode.on('tileerror', () => {
-    if (map && map.hasLayer(gaode)) {
-      map.removeLayer(gaode);
-      esri.addTo(map);
-      baseLayer = esri;
-      showMapToast('已切换备用地图');
-    }
+  let loaded = 0;
+  esri.on('tileload', () => {
+    loaded += 1;
+    if (loaded >= 3) promoteOnlineMap();
+  });
+  esri.on('tileerror', () => {
+    if (loaded === 0) useLocalMap();
   });
 
-  return gaode;
+  setTimeout(() => {
+    if (loaded < 2) useLocalMap();
+  }, 4000);
+
+  return esri;
 }
 
 function showMapToast(msg) {
@@ -272,6 +294,8 @@ function initFlowMap() {
 
   baseLayer = createBaseLayer();
   baseLayer.addTo(map);
+  useLocalMap();
+
   markerLayer = L.layerGroup().addTo(map);
 
   L.control.scale({ metric: true, imperial: false }).addTo(map);
