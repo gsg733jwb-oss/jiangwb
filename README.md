@@ -4,7 +4,7 @@
 
 ## 在线地址（部署后）
 
-**https://gsg733jwb-oss.github.io/clover/**
+**https://gsg733jwb-oss.github.io/jiangwb/**
 
 （需先按下方步骤 push 并开启 GitHub Pages）
 
@@ -33,7 +33,7 @@ git push -u origin master:main
 
 ### 2. 开启 Pages
 
-1. 打开 https://github.com/gsg733jwb-oss/clover/settings/pages
+1. 打开 https://github.com/gsg733jwb-oss/jiangwb/settings/pages
 2. **Source** 选 **GitHub Actions**
 3. 等几分钟，Actions 跑完后即可通过上述链接访问
 

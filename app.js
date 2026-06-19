@@ -452,14 +452,15 @@ function switchView(view) {
   document.querySelectorAll('.tab').forEach((t) => {
     t.classList.toggle('active', t.dataset.view === view);
   });
-  if (view === 'flow' && typeof initFlowMap === 'function') {
-    initFlowMap();
+  if (view === 'flow') {
     setTimeout(() => {
-      if (typeof invalidateFlowMap === 'function') invalidateFlowMap();
       const meta = DAY_META[currentDayIdx];
       const items = trip?.days[meta.key] || [];
       if (items.length && typeof updateFlowRoute === 'function') {
         updateFlowRoute(items, manualRouteIdx ?? 0);
+      }
+      if (typeof isMapOpen === 'function' && isMapOpen() && typeof invalidateFlowMap === 'function') {
+        invalidateFlowMap();
       }
     }, 80);
   }

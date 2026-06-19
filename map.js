@@ -1,4 +1,4 @@
-/** Leaflet 交互地图：高德（国内）+ Esri 备用，上 / 现 / 下 */
+/** Leaflet 交互地图：按需加载 · 腾讯地图（国内）+ 备用，上 / 现 / 下 */
 
 const PLACES_DATA = [
   { id: 'klia', name: '吉隆坡国际机场 KLIA', lat: 2.7456, lng: 101.7099, keywords: ['KLIA', '国际机场', '机场'] },
@@ -33,13 +33,36 @@ const KL_CENTER = [3.12, 101.68];
 const IMAGE_BOUNDS = [[2.62, 101.52], [3.22, 101.78]];
 const ROLE_ANGLE = { prev: -Math.PI / 2, next: Math.PI / 6, curr: (Math.PI * 5) / 6 };
 
+/** 国内可访问：腾讯地图优先，Esri 备用 */
+const TILE_PROVIDERS = [
+  {
+    id: 'tencent',
+    label: '腾讯地图',
+    url: 'https://rt{s}.map.gtimg.com/realtimerender?z={z}&x={x}&y={y}&type=vector&style=0',
+    subdomains: '0123',
+    attribution: '© 腾讯地图',
+    maxZoom: 18,
+  },
+  {
+    id: 'esri-street',
+    label: 'Esri 街道',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: '© Esri',
+    maxZoom: 18,
+  },
+];
+
 let map = null;
 let markerLayer = null;
 let baseLayer = null;
 let localMapLayer = null;
 let mapReady = false;
+let mapOpen = false;
+let mapControlsBound = false;
+let pendingRoute = null;
 let lastPins = [];
 let usingLocalMap = false;
+let providerIndex = 0;
 
 function isDividerRow(item) {
   return String(item['活动/站点'] || item['活动/分区'] || '').includes('━━');
@@ -136,6 +159,20 @@ function makePinIcon(cfg) {
   });
 }
 
+function showMapToast(msg) {
+  const el = document.getElementById('map-toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(showMapToast._t);
+  showMapToast._t = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+function setMapHint(show) {
+  const el = document.getElementById('map-hint');
+  if (el) el.classList.toggle('hidden', !show);
+}
+
 function useLocalMap() {
   if (!map) return;
   usingLocalMap = true;
@@ -148,55 +185,80 @@ function useLocalMap() {
   }
   if (!map.hasLayer(localMapLayer)) localMapLayer.addTo(map);
   map.setMaxBounds(L.latLngBounds(IMAGE_BOUNDS).pad(0.02));
+  showMapToast('在线地图不可用，已切换本地示意图（可缩放）');
 }
 
-function promoteOnlineMap() {
-  if (!map || !baseLayer) return;
-  baseLayer.setOpacity(1);
+function clearLocalMap() {
+  if (!map) return;
+  usingLocalMap = false;
   if (localMapLayer && map.hasLayer(localMapLayer)) map.removeLayer(localMapLayer);
   map.setMaxBounds(null);
-  usingLocalMap = false;
+}
+
+function makeTileLayer(provider) {
+  let loaded = 0;
+  let errors = 0;
+  let switched = false;
+
+  const opts = {
+    maxZoom: provider.maxZoom,
+    minZoom: 3,
+    attribution: provider.attribution,
+    crossOrigin: true,
+  };
+  if (provider.subdomains) opts.subdomains = provider.subdomains;
+
+  const layer = L.tileLayer(provider.url, opts);
+
+  layer.on('tileload', (e) => {
+    if (e.tile?.naturalWidth <= 1 || e.tile?.naturalHeight <= 1) return;
+    loaded += 1;
+    if (loaded === 1) {
+      clearLocalMap();
+      showMapToast(`在线地图 · ${provider.label}`);
+    }
+  });
+
+  layer.on('tileerror', () => {
+    errors += 1;
+    if (switched || usingLocalMap) return;
+    if (errors >= 4 && loaded === 0) tryNextProvider();
+  });
+
+  layer._providerId = provider.id;
+  return layer;
+}
+
+function tryNextProvider() {
+  if (!map) return;
+  providerIndex += 1;
+  if (providerIndex >= TILE_PROVIDERS.length) {
+    useLocalMap();
+    return;
+  }
+  if (baseLayer) {
+    map.removeLayer(baseLayer);
+    baseLayer = null;
+  }
+  const provider = TILE_PROVIDERS[providerIndex];
+  baseLayer = makeTileLayer(provider);
+  baseLayer.addTo(map);
 }
 
 function createBaseLayer() {
-  const esri = L.tileLayer(
-    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-    {
-      maxZoom: 18,
-      opacity: 0,
-      attribution: '© Esri',
-      crossOrigin: true,
-    }
-  );
-
-  let loaded = 0;
-  esri.on('tileload', () => {
-    loaded += 1;
-    if (loaded >= 3) promoteOnlineMap();
-  });
-  esri.on('tileerror', () => {
-    if (loaded === 0) useLocalMap();
-  });
-
+  providerIndex = 0;
+  const layer = makeTileLayer(TILE_PROVIDERS[0]);
   setTimeout(() => {
-    if (loaded < 2) useLocalMap();
-  }, 4000);
-
-  return esri;
+    if (!usingLocalMap && layer._tiles && Object.keys(layer._tiles).length === 0) {
+      tryNextProvider();
+    }
+  }, 5000);
+  return layer;
 }
 
-function showMapToast(msg) {
-  const el = document.getElementById('map-toast');
-  if (!el) return;
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(showMapToast._t);
-  showMapToast._t = setTimeout(() => el.classList.remove('show'), 2500);
-}
-
-function setMapHint(show) {
-  const el = document.getElementById('map-hint');
-  if (el) el.classList.toggle('hidden', !show);
+function mapZoomBy(delta) {
+  if (!map) return;
+  map.setZoom(map.getZoom() + delta, { animate: true });
 }
 
 function fitToPins(pins) {
@@ -205,13 +267,13 @@ function fitToPins(pins) {
   const next = pins.find((p) => p.role === 'next');
   const bounds = L.latLngBounds(pins.map((p) => [p.lat, p.lng]));
 
-  let maxZoom = 15;
+  let maxZoom = usingLocalMap ? 14 : 16;
   if (curr && next) {
     const dist = map.distance([curr.lat, curr.lng], [next.lat, next.lng]);
-    if (dist < 400) maxZoom = 17;
-    else if (dist < 1500) maxZoom = 16;
-    else if (dist < 8000) maxZoom = 13;
-    else maxZoom = 11;
+    if (dist < 400) maxZoom = usingLocalMap ? 15 : 17;
+    else if (dist < 1500) maxZoom = usingLocalMap ? 14 : 16;
+    else if (dist < 8000) maxZoom = usingLocalMap ? 12 : 13;
+    else maxZoom = usingLocalMap ? 10 : 11;
   }
 
   map.fitBounds(bounds, { padding: [44, 44], maxZoom, animate: true });
@@ -238,12 +300,11 @@ function renderPins(pins) {
   fitToPins(placed);
 }
 
-function drawTriple(items, clickIdx) {
+function buildRouteData(items, clickIdx) {
   const triple = getTriple(items, clickIdx);
   const prevI = triple.prev?.index ?? -1;
   const currI = triple.curr?.index ?? -1;
   const nextI = triple.next?.index ?? -1;
-  highlightTimeline(prevI, currI, nextI);
 
   const parts = [];
   const pins = [];
@@ -269,11 +330,35 @@ function drawTriple(items, clickIdx) {
     ? ` <span class="route-meta">（${missing.join('、')}暂无坐标）</span>`
     : '';
 
+  return { prevI, currI, nextI, parts, pins, extra };
+}
+
+function drawTriple(items, clickIdx) {
+  const { prevI, currI, nextI, parts, pins, extra } = buildRouteData(items, clickIdx);
+  highlightTimeline(prevI, currI, nextI);
+
   setRouteStatus(parts.length
     ? parts.join(' <span class="route-arrow">→</span> ') + extra
     : '<span class="muted">请选择左侧行程</span>');
 
-  renderPins(pins);
+  if (mapOpen && mapReady) renderPins(pins);
+}
+
+function bindMapControls() {
+  if (mapControlsBound) return;
+  mapControlsBound = true;
+
+  document.getElementById('map-zoom-in')?.addEventListener('click', () => mapZoomBy(1));
+  document.getElementById('map-zoom-out')?.addEventListener('click', () => mapZoomBy(-1));
+  document.getElementById('map-fit-btn')?.addEventListener('click', () => {
+    if (lastPins.length) fitToPins(layoutPinPositions(lastPins));
+    else map?.setView(KL_CENTER, 11);
+  });
+  document.getElementById('map-reset-btn')?.addEventListener('click', () => {
+    map?.setView(KL_CENTER, 11, { animate: true });
+  });
+  document.getElementById('map-open-btn')?.addEventListener('click', openMap);
+  document.getElementById('map-close-btn')?.addEventListener('click', closeMap);
 }
 
 function initFlowMap() {
@@ -284,35 +369,58 @@ function initFlowMap() {
   mapReady = true;
   map = L.map(el, {
     center: KL_CENTER,
-    zoom: 10,
-    zoomControl: true,
+    zoom: 11,
+    zoomControl: false,
     scrollWheelZoom: true,
     touchZoom: true,
+    pinchZoom: true,
     doubleClickZoom: true,
     boxZoom: true,
+    minZoom: 3,
+    maxZoom: 18,
   });
 
   baseLayer = createBaseLayer();
   baseLayer.addTo(map);
-  useLocalMap();
 
   markerLayer = L.layerGroup().addTo(map);
 
-  L.control.scale({ metric: true, imperial: false }).addTo(map);
+  L.control.zoom({ position: 'topright' }).addTo(map);
+  L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(map);
 
-  document.getElementById('map-fit-btn')?.addEventListener('click', () => {
-    if (lastPins.length) fitToPins(layoutPinPositions(lastPins));
-    else map.setView(KL_CENTER, 10);
-  });
-
-  document.getElementById('map-reset-btn')?.addEventListener('click', () => {
-    map.setView(KL_CENTER, 10, { animate: true });
-  });
-
+  bindMapControls();
   setMapHint(true);
 
   setTimeout(() => map.invalidateSize(), 100);
-  window.addEventListener('resize', () => map?.invalidateSize());
+  window.addEventListener('resize', () => {
+    if (mapOpen) map?.invalidateSize();
+  });
+}
+
+function isMapOpen() {
+  return mapOpen;
+}
+
+function openMap() {
+  mapOpen = true;
+  document.getElementById('map-placeholder')?.classList.add('is-hidden');
+  document.getElementById('map-body')?.classList.remove('is-hidden');
+
+  initFlowMap();
+  requestAnimationFrame(() => {
+    map?.invalidateSize();
+    if (pendingRoute) {
+      const { items, clickIdx } = pendingRoute;
+      const { pins } = buildRouteData(items, clickIdx);
+      renderPins(pins);
+    }
+  });
+}
+
+function closeMap() {
+  mapOpen = false;
+  document.getElementById('map-placeholder')?.classList.remove('is-hidden');
+  document.getElementById('map-body')?.classList.add('is-hidden');
 }
 
 function invalidateFlowMap() {
@@ -320,17 +428,21 @@ function invalidateFlowMap() {
 }
 
 function updateFlowRoute(items, clickIdx) {
-  initFlowMap();
-  requestAnimationFrame(() => {
-    drawTriple(items, clickIdx);
-    map?.invalidateSize();
-  });
+  pendingRoute = { items, clickIdx };
+  drawTriple(items, clickIdx);
+  if (mapOpen && mapReady) {
+    requestAnimationFrame(() => map?.invalidateSize());
+  }
 }
 
 function highlightTimelineLeg() {}
 
+function setupMapShell() {
+  bindMapControls();
+}
+
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initFlowMap);
+  document.addEventListener('DOMContentLoaded', setupMapShell);
 } else {
-  initFlowMap();
+  setupMapShell();
 }

@@ -467,20 +467,82 @@ tr:hover td { background: rgba(59, 130, 246, 0.06); }
 .map-panel-head { margin-bottom: 0.5rem; }
 .map-panel-head h3 { font-size: 0.95rem; margin-bottom: 0.25rem; }
 
+.map-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 200px;
+  padding: 1.5rem 1rem;
+  border-radius: var(--radius);
+  border: 1px dashed var(--border);
+  background: var(--card);
+  text-align: center;
+}
+.map-placeholder-text { font-size: 0.92rem; margin: 0; }
+.map-placeholder-sub { font-size: 0.78rem; margin: 0; }
+.map-open-btn {
+  margin-top: 0.35rem;
+  padding: 0.55rem 1.25rem;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.map-open-btn:hover { filter: brightness(1.05); }
+
+.map-body.is-hidden { display: none; }
+.map-placeholder.is-hidden { display: none; }
+.map-body { position: relative; }
+
+.map-close-btn { margin-left: auto; }
+
 .map-toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
-  margin-top: 0.35rem;
+  margin: 0 0 0.5rem;
+  width: 100%;
 }
 
 .map-btn {
-  font-size: 0.75rem;
-  padding: 0.2rem 0.55rem;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.55rem;
+  min-width: 2rem;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--text);
   cursor: pointer;
+}
+.map-btn#map-zoom-in,
+.map-btn#map-zoom-out {
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 0.3rem 0.65rem;
+  line-height: 1;
+}
+
+.trip-map .leaflet-control-zoom {
+  border: none;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.15);
+}
+.trip-map .leaflet-control-zoom a {
+  width: 32px;
+  height: 32px;
+  line-height: 32px;
+  font-size: 18px;
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+}
+.trip-map .leaflet-control-zoom a:hover {
+  background: var(--bg);
+  color: var(--accent);
 }
 .map-btn:hover { border-color: var(--accent); color: var(--accent); }
 

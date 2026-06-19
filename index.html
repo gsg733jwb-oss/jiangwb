@@ -57,14 +57,24 @@
           <div class="map-panel-head">
             <h3>上 · 现 · 下</h3>
             <p id="route-status" class="route-status muted">点击左侧日程查看前后站</p>
+          </div>
+          <div id="map-placeholder" class="map-placeholder">
+            <p class="map-placeholder-text">展开地图查看上 · 现 · 下三站位置</p>
+            <p class="map-placeholder-sub muted">腾讯地图 · 支持缩放拖动 · 按需加载</p>
+            <button type="button" class="map-open-btn" id="map-open-btn">查看地图</button>
+          </div>
+          <div id="map-body" class="map-body is-hidden">
             <div class="map-toolbar">
+              <button type="button" class="map-btn" id="map-zoom-in" title="放大">＋</button>
+              <button type="button" class="map-btn" id="map-zoom-out" title="缩小">－</button>
               <button type="button" class="map-btn" id="map-fit-btn" title="缩放到当前三站">适配行程</button>
               <button type="button" class="map-btn" id="map-reset-btn" title="吉隆坡全览">全览</button>
+              <button type="button" class="map-btn map-close-btn" id="map-close-btn" title="收起地图">收起</button>
             </div>
+            <div id="trip-map" class="trip-map"></div>
+            <p id="map-hint" class="map-hint">双指/滚轮缩放 · 拖动平移</p>
+            <p id="map-toast" class="map-toast" aria-live="polite"></p>
           </div>
-          <div id="trip-map" class="trip-map"></div>
-          <p id="map-hint" class="map-hint">点击左侧日程 · 滚轮缩放 · 拖动平移</p>
-          <p id="map-toast" class="map-toast" aria-live="polite"></p>
         </div>
       </div>
     </section>
