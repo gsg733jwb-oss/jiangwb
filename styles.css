@@ -127,6 +127,12 @@ body {
   color: var(--muted);
 }
 
+.view h4.rank-title {
+  font-size: 0.95rem;
+  margin: 1.25rem 0 0.5rem;
+  color: var(--accent);
+}
+
 .muted { color: var(--muted); font-size: 0.9rem; }
 
 /* Day bar */

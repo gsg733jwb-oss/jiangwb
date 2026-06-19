@@ -15,12 +15,16 @@ let currentDayIdx = 0;
 let manualRouteIdx = null;
 let doneSet = new Set(JSON.parse(localStorage.getItem('kl-done') || '[]'));
 let prepSet = new Set(JSON.parse(localStorage.getItem('kl-prep') || '[]'));
+let packSet = new Set(JSON.parse(localStorage.getItem('kl-pack') || '[]'));
 
 function saveDone() {
   localStorage.setItem('kl-done', JSON.stringify([...doneSet]));
 }
 function savePrep() {
   localStorage.setItem('kl-prep', JSON.stringify([...prepSet]));
+}
+function savePack() {
+  localStorage.setItem('kl-pack', JSON.stringify([...packSet]));
 }
 
 function itemId(dayKey, idx) {
@@ -269,6 +273,12 @@ function renderFood() {
       <p style="margin-top:0.35rem">📍 ${esc(r['地址'])}</p>
       <p style="margin-top:0.35rem">必点：${esc(r['必点菜品'])}</p>
     </div>`).join('');
+
+  const rankCols = ['排名', '餐厅', '区域', '必点', '人均RM', '距KLCC', '备注'];
+  document.getElementById('food-rankings').innerHTML = (trip.foodRankings || [])
+    .map((sec) => `
+      <h4 class="rank-title">${esc(sec.title)}</h4>
+      <div class="table-wrap">${tableHtml(sec.items, rankCols)}</div>`).join('');
 }
 
 function renderMap() {
@@ -307,6 +317,39 @@ function renderBudget() {
 
   const cols = ['日期', '类别', '项目', '费用下限(RM)', '费用上限(RM)', '人均/合计', '备注'];
   document.getElementById('budget-table').innerHTML = tableHtml(trip.budget, cols);
+
+  renderFullBudget();
+}
+
+function renderFullBudget() {
+  const fb = trip.fullBudget;
+  if (!fb) return;
+
+  document.getElementById('full-budget-title').textContent = fb.title || '7天全程预算';
+  document.getElementById('full-budget-subtitle').textContent = fb.subtitle || '';
+
+  const totalRow = fb.rows.find((r) => String(r['分类'] || '').includes('合计'));
+  const hintRow = fb.rows.find((r) => String(r['分类'] || '').includes('已支付'));
+  const detailRows = fb.rows.filter((r) => r !== totalRow && r !== hintRow);
+
+  document.getElementById('full-budget-summary').innerHTML = `
+    ${totalRow ? `<div class="stat-card">
+      <div class="label">全程预算合计</div>
+      <div class="value">¥ ${fmtNum(totalRow['预估上限(¥)'])}</div>
+      <div class="sub">已支付 ¥ ${fmtNum(totalRow['实际支付(¥)'])}</div>
+    </div>` : ''}
+    ${hintRow ? `<div class="stat-card">
+      <div class="label">支付进度</div>
+      <div class="value" style="font-size:1rem;line-height:1.4">${esc(hintRow['分类'])}</div>
+    </div>` : ''}`;
+
+  const cols = ['分类', '项目', '说明', '预估上限(¥)', '实际支付(¥)', '可选', '是否已订'];
+  document.getElementById('full-budget-table').innerHTML = tableHtml(detailRows, cols);
+}
+
+function fmtNum(n) {
+  if (n == null || n === '') return '—';
+  return Number(n).toLocaleString('zh-CN');
 }
 
 function renderPrep() {
@@ -340,6 +383,50 @@ function renderPrep() {
       if (cb.checked) prepSet.add(cb.dataset.id);
       else prepSet.delete(cb.dataset.id);
       savePrep();
+    });
+  });
+
+  renderPacking();
+}
+
+function renderPacking() {
+  const pk = trip.packing;
+  if (!pk) return;
+
+  document.getElementById('packing-title').textContent = pk.title || '出行携带清单';
+  document.getElementById('packing-subtitle').textContent = pk.subtitle || '';
+
+  const groups = {};
+  pk.rows.forEach((p) => {
+    const cat = p['分类'] || '其他';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(p);
+  });
+
+  document.getElementById('packing-groups').innerHTML = Object.entries(groups)
+    .map(([cat, items]) => `
+      <div class="prep-group">
+        <h3>${esc(cat)}</h3>
+        ${items.map((p) => {
+          const id = `pack::${p['物品']}`;
+          const checked = packSet.has(id);
+          const budget = p['预算(¥)'];
+          return `<div class="prep-item">
+            <input type="checkbox" id="${esc(id)}" data-id="${esc(id)}" ${checked ? 'checked' : ''} />
+            <label for="${esc(id)}">
+              ${esc(p['物品'])}${p['数量'] ? ` × ${esc(p['数量'])}` : ''}
+              ${budget ? ` <span class="tag">¥${esc(budget)}</span>` : ''}
+              <div class="when">${esc(p['备注'] || '')}</div>
+            </label>
+          </div>`;
+        }).join('')}
+      </div>`).join('');
+
+  document.querySelectorAll('#packing-groups input').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) packSet.add(cb.dataset.id);
+      else packSet.delete(cb.dataset.id);
+      savePack();
     });
   });
 }
@@ -407,6 +494,8 @@ async function init() {
   }
 
   document.getElementById('trip-title').textContent = trip.title;
+  const sub = document.getElementById('trip-subtitle');
+  if (sub && trip.subtitle) sub.textContent = trip.subtitle;
   currentDayIdx = detectCurrentDay();
 
   document.querySelectorAll('.tab').forEach((tab) => {
