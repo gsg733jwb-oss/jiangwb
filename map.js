@@ -1,53 +1,111 @@
 /** Leaflet 交互地图：按需加载 · 腾讯地图（国内）+ 备用，上 / 现 / 下 */
 
-const PLACES_DATA = [
-  { id: 'klia', name: '吉隆坡国际机场 KLIA', lat: 2.7456, lng: 101.7099, keywords: ['KLIA', '国际机场', '机场'] },
-  { id: 'moxy', name: 'Moxy Chinatown', lat: 3.1415, lng: 101.6978, keywords: ['Moxy', 'Hang Lekiu', '唐人街酒店'] },
-  { id: 'petaling', name: '茨厂街', lat: 3.1440, lng: 101.6969, keywords: ['茨厂街', 'Petaling', '唐人街', '关帝庙', '仙四师爷庙'] },
-  { id: 'central-market', name: '中央艺术坊', lat: 3.1454, lng: 101.6956, keywords: ['中央艺术坊', 'Hang Kasturi', '艺术坊'] },
-  { id: 'masjid-jamek', name: '占美清真寺', lat: 3.1493, lng: 101.6967, keywords: ['占美清真寺', 'Jamek', 'River of Life'] },
-  { id: 'merdeka', name: '独立广场', lat: 3.1490, lng: 101.6939, keywords: ['独立广场', '苏丹阿都沙末', '圣玛丽', 'I♥KL', '城市画廊', 'Merdeka'] },
-  { id: 'pavilion', name: 'Pavilion KL', lat: 3.1492, lng: 101.7132, keywords: ['Pavilion', '武吉免登', 'Bukit Bintang', '168 Jln'] },
-  { id: 'madam-kwans', name: "Madam Kwan's Pavilion", lat: 3.1490, lng: 101.7128, keywords: ['Madam Kwan', "Madam Kwan's"] },
-  { id: 'durian-bros', name: 'Durian Bros 榴莲兄弟', lat: 3.1478, lng: 101.7103, keywords: ['Durian Bros', '榴莲兄弟', '榴莲'] },
-  { id: 'sunway-lagoon', name: '双威水上乐园', lat: 3.0699, lng: 101.6066, keywords: ['Sunway Lagoon', '双威乐园', '水上乐园', 'PJS 11/15'] },
-  { id: 'sunway-pyramid', name: 'Sunway Pyramid', lat: 3.0722, lng: 101.6074, keywords: ['Sunway Pyramid', '双威金字塔', "A'Decade", 'Food Court'] },
-  { id: 'adecade', name: "A'Decade", lat: 3.0722, lng: 101.6074, keywords: ["A'Decade", 'Decade'] },
-  { id: 'imperial-lexis', name: 'Imperial Lexis', lat: 3.1512, lng: 101.7145, keywords: ['Imperial Lexis', 'Kia Peng'] },
-  { id: 'klcc-park', name: 'KLCC公园', lat: 3.1578, lng: 101.7113, keywords: ['KLCC公园', '城中城公园', 'Loke Yew'] },
-  { id: 'village-park', name: 'Village Park', lat: 3.1308, lng: 101.6234, keywords: ['Village Park', 'Damansara Utama', 'SS 21/37'] },
-  { id: 'petronas', name: '国油双峰塔', lat: 3.1578, lng: 101.7120, keywords: ['双峰塔', 'Petronas', 'Twin Towers', 'Skybridge', '观景台'] },
-  { id: 'aquaria', name: 'KLCC水族馆', lat: 3.1540, lng: 101.7118, keywords: ['水族馆', 'Aquaria', '海底隧道'] },
-  { id: 'feifei-crab', name: '肥肥蟹', lat: 3.1492, lng: 101.7130, keywords: ['肥肥蟹', 'Fei Fei', 'Pavilion Elite'] },
-  { id: 'redai', name: '热带 ReDai', lat: 3.1345, lng: 101.7150, keywords: ['ReDai', '热带', '肉骨茶', 'Thambi', 'Pudu'] },
-  { id: 'suria-klcc', name: 'Suria KLCC', lat: 3.1575, lng: 101.7118, keywords: ['Suria KLCC', 'Chipster', '伴手礼', '7-Eleven', 'KK Mart'] },
-];
+const COORD_STORE_KEY = 'kl-coords';
+let coordOverrides = JSON.parse(localStorage.getItem(COORD_STORE_KEY) || '{}');
+let PLACES_DATA = [];
+
+function coordStorageKey(dayKey, idx) {
+  return `${dayKey}::${idx}`;
+}
+
+function getCoordOverride(dayKey, idx) {
+  const v = coordOverrides[coordStorageKey(dayKey, idx)];
+  if (!v || v.lat == null || v.lng == null) return null;
+  return { lat: +v.lat, lng: +v.lng };
+}
+
+function setCoordOverride(dayKey, idx, lat, lng) {
+  const la = +lat;
+  const ln = +lng;
+  if (!Number.isFinite(la) || !Number.isFinite(ln)) return false;
+  coordOverrides[coordStorageKey(dayKey, idx)] = { lat: la, lng: ln };
+  localStorage.setItem(COORD_STORE_KEY, JSON.stringify(coordOverrides));
+  return true;
+}
+
+function clearCoordOverride(dayKey, idx) {
+  delete coordOverrides[coordStorageKey(dayKey, idx)];
+  localStorage.setItem(COORD_STORE_KEY, JSON.stringify(coordOverrides));
+}
+
+function adjacentScheduleIndex(items, idx, dir) {
+  const step = dir === 'prev' ? -1 : 1;
+  for (let j = idx + step; j >= 0 && j < items.length; j += step) {
+    if (!isDividerRow(items[j])) return j;
+  }
+  return -1;
+}
+
+function getCoordsForItem(dayKey, idx, item, items) {
+  const manual = getCoordOverride(dayKey, idx);
+  if (manual) return { ...manual, title: rowTitle(item), manual: true };
+  const place = resolvePlace(item);
+  if (place) return { lat: place.lat, lng: place.lng, title: place.title || rowTitle(item), manual: false };
+  return null;
+}
+
+function copyCoordsFromAdjacent(dayKey, idx, items, dir) {
+  const adj = adjacentScheduleIndex(items, idx, dir);
+  if (adj < 0) return { ok: false, msg: dir === 'prev' ? '没有上一站' : '没有下一站' };
+  const c = getCoordsForItem(dayKey, adj, items[adj], items);
+  if (!c) return { ok: false, msg: '相邻站点暂无坐标' };
+  setCoordOverride(dayKey, idx, c.lat, c.lng);
+  return { ok: true, coords: c };
+}
+
+async function loadPlacesData() {
+  try {
+    const res = await fetch('data/places.json');
+    if (res.ok) PLACES_DATA = await res.json();
+  } catch {
+    /* file:// 或离线时保留空列表，依赖手动坐标 */
+  }
+}
+
+function refreshMapRoute() {
+  if (!pendingRoute) return;
+  const { items, clickIdx, dayKey } = pendingRoute;
+  drawTriple(items, clickIdx, dayKey);
+}
+
+window.TripCoords = {
+  get: getCoordsForItem,
+  set: setCoordOverride,
+  clear: clearCoordOverride,
+  copyPrev: (dayKey, idx, items) => copyCoordsFromAdjacent(dayKey, idx, items, 'prev'),
+  copyNext: (dayKey, idx, items) => copyCoordsFromAdjacent(dayKey, idx, items, 'next'),
+  refresh: refreshMapRoute,
+};
+
+loadPlacesData().then(() => refreshMapRoute());
 
 const PIN = {
-  prev: { color: '#64748b', label: '上', size: 34 },
-  curr: { color: '#22c55e', label: '现', size: 46 },
-  next: { color: '#f59e0b', label: '下', size: 40 },
+  prev: { color: '#64748b', label: '上', size: 28 },
+  curr: { color: '#22c55e', label: '现', size: 36 },
+  next: { color: '#f59e0b', label: '下', size: 32 },
 };
+
+const PIN_GAP_PX = 12;
 
 const KL_CENTER = [3.12, 101.68];
 const IMAGE_BOUNDS = [[2.62, 101.52], [3.22, 101.78]];
 const ROLE_ANGLE = { prev: -Math.PI / 2, next: Math.PI / 6, curr: (Math.PI * 5) / 6 };
 
-/** 国内可访问：腾讯地图优先，Esri 备用 */
+/** 国内可访问：Esri 主图（海外区域有内容）+ 腾讯备用 + 本地底图 */
 const TILE_PROVIDERS = [
+  {
+    id: 'esri-street',
+    label: '街道图',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: '© Esri',
+    maxZoom: 18,
+  },
   {
     id: 'tencent',
     label: '腾讯地图',
     url: 'https://rt{s}.map.gtimg.com/realtimerender?z={z}&x={x}&y={y}&type=vector&style=0',
     subdomains: '0123',
-    attribution: '© 腾讯地图',
-    maxZoom: 18,
-  },
-  {
-    id: 'esri-street',
-    label: 'Esri 街道',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-    attribution: '© Esri',
+    attribution: '© 腾讯',
     maxZoom: 18,
   },
 ];
@@ -141,9 +199,13 @@ function layoutPinPositions(pins) {
   }
   const out = [];
   for (const group of clusters.values()) {
+    if (group.length === 1) {
+      out.push({ ...group[0] });
+      continue;
+    }
     for (const p of group) {
       const [lat, lng] = offsetLatLng(p.lat, p.lng, p.role, group.length);
-      out.push({ ...p, lat, lng });
+      out.push({ ...p, lat, lng, stacked: true });
     }
   }
   return out;
@@ -153,10 +215,40 @@ function makePinIcon(cfg) {
   const s = cfg.size;
   return L.divIcon({
     className: 'flow-pin-wrap',
-    html: `<div class="flow-pin" style="width:${s}px;height:${s}px;background:${cfg.color}"><span>${cfg.label}</span></div>`,
+    html: `<div class="flow-pin flow-pin-dot" style="width:${s}px;height:${s}px;background:${cfg.color}"></div>`,
     iconSize: [s, s],
     iconAnchor: [s / 2, s / 2],
   });
+}
+
+function pinsOverlapAtZoom(pins, zoom) {
+  if (pins.length < 2) return false;
+  const pts = pins.map((p) => {
+    const pt = map.project([p.lat, p.lng], zoom);
+    return { r: p.cfg.size / 2, x: pt.x, y: pt.y };
+  });
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const dist = Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y);
+      if (dist < pts[i].r + pts[j].r + PIN_GAP_PX) return true;
+    }
+  }
+  return false;
+}
+
+function zoomToSeparatePins(pins) {
+  if (!map || !pins.length) return;
+  const bounds = L.latLngBounds(pins.map((p) => [p.lat, p.lng]));
+  const maxZ = usingLocalMap ? 16 : 18;
+
+  map.fitBounds(bounds, { padding: [52, 52], maxZoom: 12, animate: false });
+
+  let zoom = map.getZoom();
+  const center = bounds.getCenter();
+
+  while (zoom < maxZ && pinsOverlapAtZoom(pins, zoom)) zoom += 1;
+
+  map.setView(center, zoom, { animate: true });
 }
 
 function showMapToast(msg) {
@@ -173,6 +265,14 @@ function setMapHint(show) {
   if (el) el.classList.toggle('hidden', !show);
 }
 
+function showLocalUnderlay() {
+  if (!map) return;
+  if (!localMapLayer) {
+    localMapLayer = L.imageOverlay('assets/kl-map.jpg', IMAGE_BOUNDS, { opacity: 1, interactive: false });
+  }
+  if (!map.hasLayer(localMapLayer)) localMapLayer.addTo(map);
+}
+
 function useLocalMap() {
   if (!map) return;
   usingLocalMap = true;
@@ -180,12 +280,9 @@ function useLocalMap() {
     map.removeLayer(baseLayer);
     baseLayer = null;
   }
-  if (!localMapLayer) {
-    localMapLayer = L.imageOverlay('assets/kl-map.jpg', IMAGE_BOUNDS, { opacity: 1, interactive: false });
-  }
-  if (!map.hasLayer(localMapLayer)) localMapLayer.addTo(map);
+  showLocalUnderlay();
   map.setMaxBounds(L.latLngBounds(IMAGE_BOUNDS).pad(0.02));
-  showMapToast('在线地图不可用，已切换本地示意图（可缩放）');
+  showMapToast('已切换本地示意图');
 }
 
 function clearLocalMap() {
@@ -198,7 +295,6 @@ function clearLocalMap() {
 function makeTileLayer(provider) {
   let loaded = 0;
   let errors = 0;
-  let switched = false;
 
   const opts = {
     maxZoom: provider.maxZoom,
@@ -211,7 +307,8 @@ function makeTileLayer(provider) {
   const layer = L.tileLayer(provider.url, opts);
 
   layer.on('tileload', (e) => {
-    if (e.tile?.naturalWidth <= 1 || e.tile?.naturalHeight <= 1) return;
+    const tile = e.tile;
+    if (!tile || tile.naturalWidth < 64 || tile.naturalHeight < 64) return;
     loaded += 1;
     if (loaded === 1) {
       clearLocalMap();
@@ -221,8 +318,8 @@ function makeTileLayer(provider) {
 
   layer.on('tileerror', () => {
     errors += 1;
-    if (switched || usingLocalMap) return;
-    if (errors >= 4 && loaded === 0) tryNextProvider();
+    if (usingLocalMap) return;
+    if (errors >= 3 && loaded === 0) tryNextProvider();
   });
 
   layer._providerId = provider.id;
@@ -247,13 +344,16 @@ function tryNextProvider() {
 
 function createBaseLayer() {
   providerIndex = 0;
+  showLocalUnderlay();
   const layer = makeTileLayer(TILE_PROVIDERS[0]);
   setTimeout(() => {
-    if (!usingLocalMap && layer._tiles && Object.keys(layer._tiles).length === 0) {
-      tryNextProvider();
-    }
-  }, 5000);
+    if (!usingLocalMap && loadedTilesCount(layer) < 2) tryNextProvider();
+  }, 4000);
   return layer;
+}
+
+function loadedTilesCount(layer) {
+  return layer?._tiles ? Object.keys(layer._tiles).length : 0;
 }
 
 function mapZoomBy(delta) {
@@ -262,21 +362,7 @@ function mapZoomBy(delta) {
 }
 
 function fitToPins(pins) {
-  if (!map || !pins.length) return;
-  const curr = pins.find((p) => p.role === 'curr');
-  const next = pins.find((p) => p.role === 'next');
-  const bounds = L.latLngBounds(pins.map((p) => [p.lat, p.lng]));
-
-  let maxZoom = usingLocalMap ? 14 : 16;
-  if (curr && next) {
-    const dist = map.distance([curr.lat, curr.lng], [next.lat, next.lng]);
-    if (dist < 400) maxZoom = usingLocalMap ? 15 : 17;
-    else if (dist < 1500) maxZoom = usingLocalMap ? 14 : 16;
-    else if (dist < 8000) maxZoom = usingLocalMap ? 12 : 13;
-    else maxZoom = usingLocalMap ? 10 : 11;
-  }
-
-  map.fitBounds(bounds, { padding: [44, 44], maxZoom, animate: true });
+  zoomToSeparatePins(pins);
 }
 
 function renderPins(pins) {
@@ -294,13 +380,13 @@ function renderPins(pins) {
   const placed = layoutPinPositions(pins);
   for (const p of placed) {
     L.marker([p.lat, p.lng], { icon: makePinIcon(p.cfg), zIndexOffset: p.role === 'curr' ? 300 : p.role === 'next' ? 200 : 100 })
-      .bindTooltip(`${p.cfg.label} · ${p.title}`, { direction: 'top', offset: [0, -8] })
+      .bindTooltip(p.title, { direction: 'top', offset: [0, -6] })
       .addTo(markerLayer);
   }
-  fitToPins(placed);
+  requestAnimationFrame(() => zoomToSeparatePins(placed));
 }
 
-function buildRouteData(items, clickIdx) {
+function buildRouteData(items, clickIdx, dayKey) {
   const triple = getTriple(items, clickIdx);
   const prevI = triple.prev?.index ?? -1;
   const currI = triple.curr?.index ?? -1;
@@ -314,8 +400,8 @@ function buildRouteData(items, clickIdx) {
     const title = rowTitle(row.item);
     const cfg = PIN[role];
     parts.push(`<span class="leg-${role}">${cfg.label} ${title}</span>`);
-    const place = resolvePlace(row.item);
-    if (place) pins.push({ lat: place.lat, lng: place.lng, cfg, title, role });
+    const coords = getCoordsForItem(dayKey, row.index, row.item, items);
+    if (coords) pins.push({ lat: coords.lat, lng: coords.lng, cfg, title, role });
   };
 
   collect(triple.prev, 'prev');
@@ -333,8 +419,8 @@ function buildRouteData(items, clickIdx) {
   return { prevI, currI, nextI, parts, pins, extra };
 }
 
-function drawTriple(items, clickIdx) {
-  const { prevI, currI, nextI, parts, pins, extra } = buildRouteData(items, clickIdx);
+function drawTriple(items, clickIdx, dayKey) {
+  const { prevI, currI, nextI, parts, pins, extra } = buildRouteData(items, clickIdx, dayKey);
   highlightTimeline(prevI, currI, nextI);
 
   setRouteStatus(parts.length
@@ -407,14 +493,19 @@ function openMap() {
   document.getElementById('map-body')?.classList.remove('is-hidden');
 
   initFlowMap();
-  requestAnimationFrame(() => {
-    map?.invalidateSize();
+
+  const refresh = () => {
+    map?.invalidateSize(true);
     if (pendingRoute) {
-      const { items, clickIdx } = pendingRoute;
-      const { pins } = buildRouteData(items, clickIdx);
+      const { items, clickIdx, dayKey } = pendingRoute;
+      const { pins } = buildRouteData(items, clickIdx, dayKey);
       renderPins(pins);
     }
-  });
+  };
+
+  requestAnimationFrame(refresh);
+  setTimeout(refresh, 120);
+  setTimeout(refresh, 400);
 }
 
 function closeMap() {
@@ -427,9 +518,9 @@ function invalidateFlowMap() {
   map?.invalidateSize();
 }
 
-function updateFlowRoute(items, clickIdx) {
-  pendingRoute = { items, clickIdx };
-  drawTriple(items, clickIdx);
+function updateFlowRoute(items, clickIdx, dayKey) {
+  pendingRoute = { items, clickIdx, dayKey };
+  drawTriple(items, clickIdx, dayKey);
   if (mapOpen && mapReady) {
     requestAnimationFrame(() => map?.invalidateSize());
   }

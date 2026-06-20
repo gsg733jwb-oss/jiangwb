@@ -348,6 +348,57 @@ body {
 .btn-sm:hover { border-color: var(--accent); }
 .btn-sm.done-btn.is-done { background: var(--done); border-color: var(--done); color: #fff; }
 
+.coord-edit {
+  margin-top: 0.5rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed var(--border);
+}
+.coord-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.coord-val { font-size: 0.75rem; color: var(--muted); font-family: ui-monospace, monospace; }
+.coord-val.is-manual { color: var(--accent); }
+.coord-missing { font-size: 0.75rem; color: #f87171; }
+.coord-panel {
+  display: none;
+  margin-top: 0.5rem;
+  padding: 0.55rem;
+  background: var(--bg);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.coord-panel.open { display: block; }
+.coord-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  margin-bottom: 0.45rem;
+}
+.coord-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.coord-fields input {
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  background: var(--card);
+  color: var(--text);
+}
+.coord-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
 /* Cards grid */
 .cards {
   display: grid;
@@ -417,12 +468,20 @@ tr:hover td { background: rgba(59, 130, 246, 0.06); }
 .stat-card .sub { font-size: 0.75rem; color: var(--muted); margin-top: 0.2rem; }
 
 .prep-group { margin-bottom: 1.5rem; }
-.prep-group h3 {
-  font-size: 0.9rem;
-  color: var(--accent);
-  margin-bottom: 0.6rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.prep-group h3,
+.prep-group h4 {
+  font-size: 0.88rem;
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+.checklist-type { margin-bottom: 1.75rem; }
+.checklist-type-title {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 2px solid var(--border);
+  color: var(--text);
 }
 
 .prep-item {
@@ -579,17 +638,12 @@ tr:hover td { background: rgba(59, 130, 246, 0.06); }
 
 .flow-pin-wrap { background: transparent; border: none; }
 .flow-pin {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   border-radius: 50%;
   border: 3px solid #fff;
   box-shadow: 0 2px 10px rgba(0,0,0,0.35);
-  color: #fff;
-  font-weight: 700;
-  font-size: 0.95rem;
-  line-height: 1;
 }
+.flow-pin-dot { box-sizing: border-box; }
 
 .map-hint {
   margin: 0.35rem 0 0;

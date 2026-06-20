@@ -41,7 +41,7 @@ def export_full_budget(ws):
     return {'title': title, 'subtitle': subtitle, 'rows': cleaned}
 
 
-def export_packing(ws):
+def export_checklist(ws):
     title = str(ws.cell(1, 1).value or '').strip()
     subtitle = str(ws.cell(2, 1).value or '').strip()
     rows = sheet_to_dict(ws, header_row=4)
@@ -92,8 +92,7 @@ def main():
         'mapList': sheet_to_dict(wb['地图清单对照']),
         'budget': sheet_to_dict(wb['预算明细']),
         'fullBudget': export_full_budget(wb['7天全预算']),
-        'prep': sheet_to_dict(wb['行前准备']),
-        'packing': export_packing(wb['出行全清单']),
+        'checklist': export_checklist(wb['行前准备与携带清单']),
     }
     for name in wb.sheetnames:
         if name.startswith('Day'):
@@ -106,7 +105,7 @@ def main():
     inline.write_text(f'window.__TRIP_DATA__ = {text};\n', encoding='utf-8')
     print(f'Exported → {OUT}')
     print(f'Inline   → {inline}')
-    print(f'  days={len(out["days"])} foodRankings={len(out["foodRankings"])} fullBudget={len(out["fullBudget"]["rows"])} packing={len(out["packing"]["rows"])}')
+    print(f'  days={len(out["days"])} foodRankings={len(out["foodRankings"])} fullBudget={len(out["fullBudget"]["rows"])} checklist={len(out["checklist"]["rows"])}')
 
 
 if __name__ == '__main__':

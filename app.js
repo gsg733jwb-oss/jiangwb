@@ -14,21 +14,104 @@ let trip = null;
 let currentDayIdx = 0;
 let manualRouteIdx = null;
 let doneSet = new Set(JSON.parse(localStorage.getItem('kl-done') || '[]'));
-let prepSet = new Set(JSON.parse(localStorage.getItem('kl-prep') || '[]'));
-let packSet = new Set(JSON.parse(localStorage.getItem('kl-pack') || '[]'));
+let checklistSet = new Set(JSON.parse(localStorage.getItem('kl-checklist') || '[]'));
 
 function saveDone() {
   localStorage.setItem('kl-done', JSON.stringify([...doneSet]));
 }
-function savePrep() {
-  localStorage.setItem('kl-prep', JSON.stringify([...prepSet]));
+function saveChecklist() {
+  localStorage.setItem('kl-checklist', JSON.stringify([...checklistSet]));
 }
-function savePack() {
-  localStorage.setItem('kl-pack', JSON.stringify([...packSet]));
+
+function migrateChecklistStorage() {
+  if (checklistSet.size) return;
+  const legacy = [
+    ...JSON.parse(localStorage.getItem('kl-prep') || '[]'),
+    ...JSON.parse(localStorage.getItem('kl-pack') || '[]'),
+  ];
+  if (legacy.length) {
+    checklistSet = new Set(legacy.map((id) => id.replace(/^prep::/, 'check::').replace(/^pack::/, 'check::')));
+    saveChecklist();
+  }
 }
 
 function itemId(dayKey, idx) {
   return `${dayKey}::${idx}`;
+}
+
+function formatCoords(c) {
+  if (!c) return '';
+  return `${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`;
+}
+
+function coordSummary(dayKey, idx, item, items) {
+  if (!window.TripCoords) return '';
+  const c = window.TripCoords.get(dayKey, idx, item, items);
+  if (!c) return '<span class="coord-missing">未设坐标</span>';
+  return `<span class="coord-val ${c.manual ? 'is-manual' : ''}">${formatCoords(c)}${c.manual ? ' · 手动' : ''}</span>`;
+}
+
+function bindCoordEditors(dayKey, items) {
+  const tl = document.getElementById('timeline');
+  if (!tl || !window.TripCoords) return;
+
+  tl.querySelectorAll('.coord-toggle').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wrap = btn.closest('.coord-edit');
+      const panel = wrap?.querySelector('.coord-panel');
+      if (!panel) return;
+      const open = !panel.classList.contains('open');
+      tl.querySelectorAll('.coord-panel.open').forEach((p) => p.classList.remove('open'));
+      if (open) {
+        panel.classList.add('open');
+        const idx = +wrap.dataset.idx;
+        const c = window.TripCoords.get(dayKey, idx, items[idx], items);
+        const latIn = panel.querySelector('.coord-lat');
+        const lngIn = panel.querySelector('.coord-lng');
+        if (latIn) latIn.value = c ? c.lat : '';
+        if (lngIn) lngIn.value = c ? c.lng : '';
+      }
+    });
+  });
+
+  tl.querySelectorAll('.coord-panel').forEach((panel) => {
+    panel.addEventListener('click', (e) => e.stopPropagation());
+
+    const wrap = panel.closest('.coord-edit');
+    const idx = +wrap.dataset.idx;
+
+    panel.querySelector('.coord-save')?.addEventListener('click', () => {
+      const lat = panel.querySelector('.coord-lat')?.value;
+      const lng = panel.querySelector('.coord-lng')?.value;
+      if (!window.TripCoords.set(dayKey, idx, lat, lng)) {
+        alert('请输入有效的纬度和经度');
+        return;
+      }
+      panel.classList.remove('open');
+      renderFlow();
+    });
+
+    panel.querySelector('.coord-clear')?.addEventListener('click', () => {
+      window.TripCoords.clear(dayKey, idx);
+      panel.classList.remove('open');
+      renderFlow();
+    });
+
+    panel.querySelector('.coord-copy-prev')?.addEventListener('click', () => {
+      const r = window.TripCoords.copyPrev(dayKey, idx, items);
+      if (!r.ok) { alert(r.msg); return; }
+      panel.classList.remove('open');
+      renderFlow();
+    });
+
+    panel.querySelector('.coord-copy-next')?.addEventListener('click', () => {
+      const r = window.TripCoords.copyNext(dayKey, idx, items);
+      if (!r.ok) { alert(r.msg); return; }
+      panel.classList.remove('open');
+      renderFlow();
+    });
+  });
 }
 
 function klNow() {
@@ -208,6 +291,24 @@ function renderFlow() {
         </div>
         ${r.detail ? `<div class="t-note">${esc(r.detail)}</div>` : ''}
         ${r.note ? `<div class="t-note" style="opacity:0.85">⚠️ ${esc(r.note)}</div>` : ''}
+        <div class="coord-edit" data-idx="${i}">
+          <div class="coord-row">
+            ${coordSummary(meta.key, i, item, items)}
+            <button type="button" class="btn-sm coord-toggle">编辑坐标</button>
+          </div>
+          <div class="coord-panel">
+            <div class="coord-fields">
+              <label>纬度 <input type="number" class="coord-lat" step="0.0001" placeholder="3.1490" /></label>
+              <label>经度 <input type="number" class="coord-lng" step="0.0001" placeholder="101.7128" /></label>
+            </div>
+            <div class="coord-actions">
+              <button type="button" class="btn-sm coord-copy-prev">同上</button>
+              <button type="button" class="btn-sm coord-copy-next">同下</button>
+              <button type="button" class="btn-sm coord-save">保存</button>
+              <button type="button" class="btn-sm coord-clear">清除</button>
+            </div>
+          </div>
+        </div>
         <div class="t-actions">
           <button class="btn-sm done-btn ${done ? 'is-done' : ''}" data-id="${id}">${done ? '✓ 已完成' : '标记完成'}</button>
         </div>
@@ -235,15 +336,17 @@ function renderFlow() {
 
   const routeFrom = manualRouteIdx != null ? manualRouteIdx : (currentIdx >= 0 ? currentIdx : 0);
   if (typeof updateFlowRoute === 'function') {
-    updateFlowRoute(items, routeFrom);
+    updateFlowRoute(items, routeFrom, meta.key);
   }
+
+  bindCoordEditors(meta.key, items);
 
   tl.querySelectorAll('.t-item').forEach((el) => {
     el.style.cursor = 'pointer';
     el.addEventListener('click', (e) => {
-      if (e.target.closest('.done-btn')) return;
+      if (e.target.closest('.done-btn') || e.target.closest('.coord-edit')) return;
       manualRouteIdx = +el.dataset.idx;
-      updateFlowRoute(items, manualRouteIdx);
+      updateFlowRoute(items, manualRouteIdx, meta.key);
       el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
   });
@@ -353,80 +456,52 @@ function fmtNum(n) {
 }
 
 function renderPrep() {
-  const groups = {};
-  trip.prep.forEach((p) => {
-    const cat = p['类别'] || '其他';
-    if (!groups[cat]) groups[cat] = [];
-    groups[cat].push(p);
+  migrateChecklistStorage();
+  const cl = trip.checklist;
+  if (!cl) return;
+
+  document.getElementById('checklist-title').textContent = cl.title || '行前准备与携带清单';
+  document.getElementById('checklist-subtitle').textContent = cl.subtitle || '';
+
+  const byType = {};
+  cl.rows.forEach((row) => {
+    const type = row['类型'] || '其他';
+    const cat = row['分类'] || '其他';
+    if (!byType[type]) byType[type] = {};
+    if (!byType[type][cat]) byType[type][cat] = [];
+    byType[type][cat].push(row);
   });
 
-  document.getElementById('prep-groups').innerHTML = Object.entries(groups)
-    .map(([cat, items]) => `
-      <div class="prep-group">
-        <h3>${esc(cat)}</h3>
-        ${items.map((p) => {
-          const id = `prep::${p['事项/物品']}`;
-          const checked = prepSet.has(id);
-          const must = p['必备'] === '是';
-          return `<div class="prep-item ${must ? 'must' : ''}">
-            <input type="checkbox" id="${esc(id)}" data-id="${esc(id)}" ${checked ? 'checked' : ''} />
-            <label for="${esc(id)}">
-              ${esc(p['事项/物品'])}
-              <div class="when">${esc(p['哪一天'])}${p['备注'] ? ' · ' + esc(p['备注']) : ''}</div>
-            </label>
-          </div>`;
-        }).join('')}
+  document.getElementById('checklist-groups').innerHTML = Object.entries(byType)
+    .map(([type, cats]) => `
+      <div class="checklist-type">
+        <h3 class="checklist-type-title">${esc(type)}</h3>
+        ${Object.entries(cats).map(([cat, items]) => `
+          <div class="prep-group">
+            <h4>${esc(cat)}</h4>
+            ${items.map((p) => {
+              const id = `check::${p['事项/物品']}`;
+              const checked = checklistSet.has(id);
+              const must = p['必备'] === '是';
+              const when = p['何时/数量'];
+              const budget = p['预算(¥)'];
+              const extra = [when, budget ? `¥${budget}` : '', p['备注']].filter(Boolean).join(' · ');
+              return `<div class="prep-item ${must ? 'must' : ''}">
+                <input type="checkbox" id="${esc(id)}" data-id="${esc(id)}" ${checked ? 'checked' : ''} />
+                <label for="${esc(id)}">
+                  ${esc(p['事项/物品'])}
+                  <div class="when">${esc(extra)}</div>
+                </label>
+              </div>`;
+            }).join('')}
+          </div>`).join('')}
       </div>`).join('');
 
-  document.querySelectorAll('#prep-groups input').forEach((cb) => {
+  document.querySelectorAll('#checklist-groups input').forEach((cb) => {
     cb.addEventListener('change', () => {
-      if (cb.checked) prepSet.add(cb.dataset.id);
-      else prepSet.delete(cb.dataset.id);
-      savePrep();
-    });
-  });
-
-  renderPacking();
-}
-
-function renderPacking() {
-  const pk = trip.packing;
-  if (!pk) return;
-
-  document.getElementById('packing-title').textContent = pk.title || '出行携带清单';
-  document.getElementById('packing-subtitle').textContent = pk.subtitle || '';
-
-  const groups = {};
-  pk.rows.forEach((p) => {
-    const cat = p['分类'] || '其他';
-    if (!groups[cat]) groups[cat] = [];
-    groups[cat].push(p);
-  });
-
-  document.getElementById('packing-groups').innerHTML = Object.entries(groups)
-    .map(([cat, items]) => `
-      <div class="prep-group">
-        <h3>${esc(cat)}</h3>
-        ${items.map((p) => {
-          const id = `pack::${p['物品']}`;
-          const checked = packSet.has(id);
-          const budget = p['预算(¥)'];
-          return `<div class="prep-item">
-            <input type="checkbox" id="${esc(id)}" data-id="${esc(id)}" ${checked ? 'checked' : ''} />
-            <label for="${esc(id)}">
-              ${esc(p['物品'])}${p['数量'] ? ` × ${esc(p['数量'])}` : ''}
-              ${budget ? ` <span class="tag">¥${esc(budget)}</span>` : ''}
-              <div class="when">${esc(p['备注'] || '')}</div>
-            </label>
-          </div>`;
-        }).join('')}
-      </div>`).join('');
-
-  document.querySelectorAll('#packing-groups input').forEach((cb) => {
-    cb.addEventListener('change', () => {
-      if (cb.checked) packSet.add(cb.dataset.id);
-      else packSet.delete(cb.dataset.id);
-      savePack();
+      if (cb.checked) checklistSet.add(cb.dataset.id);
+      else checklistSet.delete(cb.dataset.id);
+      saveChecklist();
     });
   });
 }
@@ -457,7 +532,8 @@ function switchView(view) {
       const meta = DAY_META[currentDayIdx];
       const items = trip?.days[meta.key] || [];
       if (items.length && typeof updateFlowRoute === 'function') {
-        updateFlowRoute(items, manualRouteIdx ?? 0);
+        const meta = DAY_META[currentDayIdx];
+        updateFlowRoute(items, manualRouteIdx ?? 0, meta.key);
       }
       if (typeof isMapOpen === 'function' && isMapOpen() && typeof invalidateFlowMap === 'function') {
         invalidateFlowMap();
