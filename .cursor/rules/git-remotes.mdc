@@ -1,0 +1,39 @@
+---
+description: 默认 git pull/push 使用 Gitee；GitHub 仅在用户明确要求时使用
+alwaysApply: true
+---
+
+# Git 远程仓库约定
+
+## 默认目标：Gitee
+
+本仓库默认的 `git pull` / `git push` 目标是 **Gitee**，不是 GitHub。
+
+| Remote   | 用途     | URL |
+|----------|----------|-----|
+| `origin` | 默认同步 | `https://gitee.com/gsg733jwb/jiangwb.git` |
+| `github` | 备用     | `https://github.com/gsg733jwb-oss/jiangwb.git` |
+
+## Agent 行为
+
+- 用户说 **pull**、**push**、**同步**、**上传**、**拉代码** 时，默认操作 `origin`（Gitee）。
+- **仅当用户明确说 GitHub**（例如「推到 github」「从 github 拉」）时，才使用 `github` remote。
+- 不要未经用户同意执行 `git push`。
+- 不要修改全局 git config（`git config --global`）。
+- 不要对 `main`/`master` 执行 force push，除非用户明确要求。
+
+## 常用命令
+
+```bash
+# 默认（Gitee）
+git pull
+git push
+
+# 显式指定 Gitee
+git pull origin master
+git push origin master
+
+# 仅当用户明确要求 GitHub 时
+git pull github master
+git push github master
+```
