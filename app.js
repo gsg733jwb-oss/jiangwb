@@ -235,6 +235,7 @@ function renderDayBar() {
     btn.addEventListener('click', () => {
       currentDayIdx = +btn.dataset.idx;
       manualRouteIdx = null;
+      window.__klUserScrolled = false;
       renderFlow();
       renderDayBar();
     });
@@ -331,7 +332,9 @@ function renderFlow() {
 
   if (currentIdx >= 0) {
     const el = document.getElementById(`item-${currentIdx}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (el && !window.__klUserScrolled) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   }
 
   const routeFrom = manualRouteIdx != null ? manualRouteIdx : (currentIdx >= 0 ? currentIdx : 0);
@@ -340,6 +343,7 @@ function renderFlow() {
   }
 
   bindCoordEditors(meta.key, items);
+  updateFab();
 
   tl.querySelectorAll('.t-item').forEach((el) => {
     el.style.cursor = 'pointer';
@@ -366,7 +370,7 @@ function renderOverview() {
 
 function renderFood() {
   const cols = ['日期', '餐次', '餐厅', '必点', '人均RM', '说明'];
-  document.getElementById('food-table').innerHTML = tableHtml(trip.foodDist, cols);
+  document.getElementById('food-table').innerHTML = tableResponsive(trip.foodDist, cols, { titleCol: '餐厅' });
 
   document.getElementById('restaurant-cards').innerHTML = trip.restaurants
     .filter((r) => r['安排日'] && !String(r['安排日']).includes('备选'))
@@ -381,12 +385,12 @@ function renderFood() {
   document.getElementById('food-rankings').innerHTML = (trip.foodRankings || [])
     .map((sec) => `
       <h4 class="rank-title">${esc(sec.title)}</h4>
-      <div class="table-wrap">${tableHtml(sec.items, rankCols)}</div>`).join('');
+      <div class="table-wrap">${tableResponsive(sec.items, rankCols, { titleCol: '餐厅' })}</div>`).join('');
 }
 
 function renderMap() {
   const cols = ['序号', '地点名称', '类型', '备注', '优先级', '安排日期', '时段'];
-  document.getElementById('map-table').innerHTML = tableHtml(trip.mapList, cols);
+  document.getElementById('map-table').innerHTML = tableResponsive(trip.mapList, cols, { titleCol: '地点名称' });
 }
 
 function renderBudget() {
@@ -417,7 +421,7 @@ function renderBudget() {
   `;
 
   const cols = ['日期', '类别', '项目', '说明', '预算(¥)', '实际支付(¥)', '可选'];
-  document.getElementById('budget-table').innerHTML = tableHtml(trip.budget, cols, { moneyCols: ['预算(¥)', '实际支付(¥)'] });
+  document.getElementById('budget-table').innerHTML = tableResponsive(trip.budget, cols, { moneyCols: ['预算(¥)', '实际支付(¥)'], titleCol: '项目' });
 
   renderFullBudget();
 }
@@ -445,7 +449,7 @@ function renderFullBudget() {
     </div>` : ''}`;
 
   const cols = ['分类', '项目', '说明', '预算(¥)', '实际支付(¥)', '可选', '状态'];
-  document.getElementById('full-budget-table').innerHTML = tableHtml(detailRows, cols, { moneyCols: ['预算(¥)', '实际支付(¥)'] });
+  document.getElementById('full-budget-table').innerHTML = tableResponsive(detailRows, cols, { moneyCols: ['预算(¥)', '实际支付(¥)'], titleCol: '项目' });
 }
 
 function fmtNum(n) {
@@ -516,6 +520,28 @@ function tableHtml(rows, cols, { moneyCols = [] } = {}) {
     </tbody></table>`;
 }
 
+function tableCell(col, val, moneyCols) {
+  if (moneyCols.includes(col)) {
+    return val == null || val === '' ? '—' : `¥ ${fmtNum(val)}`;
+  }
+  return esc(val ?? '—');
+}
+
+function tableResponsive(rows, cols, { moneyCols = [], titleCol } = {}) {
+  const titleKey = titleCol || cols.find((c) => ['项目', '餐厅', '地点名称', '事项/物品'].includes(c)) || cols[1] || cols[0];
+  const desktop = tableHtml(rows, cols, { moneyCols });
+  const mobile = `<div class="mob-cards">${rows.map((r) => `
+    <article class="mob-card">
+      <div class="mob-card-title">${tableCell(titleKey, r[titleKey], moneyCols)}</div>
+      ${cols.filter((c) => c !== titleKey).map((c) => `
+        <div class="mob-row">
+          <span class="mob-k">${esc(c)}</span>
+          <span class="mob-v">${tableCell(c, r[c], moneyCols)}</span>
+        </div>`).join('')}
+    </article>`).join('')}</div>`;
+  return `<div class="table-responsive">${desktop}${mobile}</div>`;
+}
+
 function esc(s) {
   if (s == null) return '';
   return String(s)
@@ -525,18 +551,44 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
+function scrollToCurrentItem() {
+  const meta = DAY_META[currentDayIdx];
+  const items = trip?.days[meta.key] || [];
+  const { currentIdx } = getLiveStatus(meta.key, items);
+  if (currentIdx < 0) return;
+  const el = document.getElementById(`item-${currentIdx}`);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('flash-focus');
+    setTimeout(() => el.classList.remove('flash-focus'), 1200);
+  }
+}
+
+function updateFab() {
+  const fab = document.getElementById('fab-jump');
+  if (!fab) return;
+  const flowActive = document.getElementById('view-flow')?.classList.contains('active');
+  const live = document.getElementById('live-mode')?.checked;
+  const meta = DAY_META[currentDayIdx];
+  const items = trip?.days[meta.key] || [];
+  const { currentIdx } = getLiveStatus(meta.key, items);
+  fab.hidden = !(flowActive && live && currentIdx >= 0);
+}
+
 function switchView(view) {
   document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
   document.getElementById(`view-${view}`).classList.add('active');
-  document.querySelectorAll('.tab').forEach((t) => {
+  document.querySelectorAll('.nav-item').forEach((t) => {
     t.classList.toggle('active', t.dataset.view === view);
   });
+  localStorage.setItem('kl-view', view);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  updateFab();
   if (view === 'flow') {
     setTimeout(() => {
       const meta = DAY_META[currentDayIdx];
       const items = trip?.days[meta.key] || [];
       if (items.length && typeof updateFlowRoute === 'function') {
-        const meta = DAY_META[currentDayIdx];
         updateFlowRoute(items, manualRouteIdx ?? 0, meta.key);
       }
       if (typeof isMapOpen === 'function' && isMapOpen() && typeof invalidateFlowMap === 'function') {
@@ -579,12 +631,22 @@ async function init() {
   if (sub && trip.subtitle) sub.textContent = trip.subtitle;
   currentDayIdx = detectCurrentDay();
 
-  document.querySelectorAll('.tab').forEach((tab) => {
+  document.querySelectorAll('.nav-item').forEach((tab) => {
     tab.addEventListener('click', () => switchView(tab.dataset.view));
   });
 
+  document.getElementById('fab-jump')?.addEventListener('click', scrollToCurrentItem);
+
+  let scrollTimer;
+  window.addEventListener('scroll', () => {
+    window.__klUserScrolled = true;
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => { window.__klUserScrolled = false; }, 8000);
+  }, { passive: true });
+
   document.getElementById('live-mode').addEventListener('change', () => {
     manualRouteIdx = null;
+    window.__klUserScrolled = false;
     renderFlow();
     renderDayBar();
   });
@@ -598,6 +660,11 @@ async function init() {
   renderPrep();
   updateClock();
   setInterval(updateClock, 30000);
+
+  const savedView = localStorage.getItem('kl-view');
+  if (savedView && document.getElementById(`view-${savedView}`)) {
+    switchView(savedView);
+  }
 }
 
 init();
