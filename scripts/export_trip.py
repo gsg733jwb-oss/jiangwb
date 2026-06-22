@@ -102,25 +102,24 @@ def export_merged_budget(ws):
         status = ws.cell(r, 9).value
 
         if src == '预算明细':
-            amount = est if est is not None else 0
             budget_rows.append({
                 '日期': date,
                 '类别': cat,
                 '项目': item,
-                '费用下限(RM)': amount,
-                '费用上限(RM)': amount,
-                '人均/合计': '人均' if cat == '餐饮' else '合计',
-                '备注': note or '',
+                '说明': note or '',
+                '预算(¥)': est,
+                '实际支付(¥)': paid,
+                '可选': optional or None,
             })
         elif src == '7天全预算':
             full_rows.append({
                 '分类': cat,
                 '项目': item,
                 '说明': note,
-                '预估上限(¥)': est,
+                '预算(¥)': est,
                 '实际支付(¥)': paid,
                 '可选': optional or None,
-                '是否已订': status or '',
+                '状态': status or '',
             })
         elif src == '行前准备':
             type_name, sub_cat = split_type_cat(cat)
@@ -139,10 +138,10 @@ def export_merged_budget(ws):
             '分类': '合计',
             '项目': None,
             '说明': None,
-            '预估上限(¥)': total_budget,
+            '预算(¥)': total_budget,
             '实际支付(¥)': total_paid,
             '可选': None,
-            '是否已订': None,
+            '状态': None,
         })
         if total_budget and total_paid:
             pct = round(float(total_paid) / float(total_budget) * 100, 1)
@@ -150,10 +149,10 @@ def export_merged_budget(ws):
                 '分类': f'已支付约 {pct}%（¥{total_paid:,.0f} / ¥{total_budget:,.0f}）',
                 '项目': None,
                 '说明': None,
-                '预估上限(¥)': None,
+                '预算(¥)': None,
                 '实际支付(¥)': None,
                 '可选': None,
-                '是否已订': None,
+                '状态': None,
             })
 
     return (

@@ -390,36 +390,34 @@ function renderMap() {
 }
 
 function renderBudget() {
-  const rows = trip.budget.filter((b) => b['日期'] !== '全程');
-  const summary = trip.budget.find((b) => b['日期'] === '全程');
+  const rows = trip.budget.filter((b) => !b['可选']);
+  const totalBudget = rows.reduce((s, r) => s + (+r['预算(¥)'] || 0), 0);
+  const totalPaid = rows.reduce((s, r) => s + (+r['实际支付(¥)'] || 0), 0);
   const byDate = {};
   rows.forEach((r) => {
     const d = r['日期'];
-    if (!byDate[d]) byDate[d] = { min: 0, max: 0 };
-    const lo = +r['费用下限(RM)'] || 0;
-    const hi = +r['费用上限(RM)'] || 0;
-    if (r['人均/合计'] === '人均') {
-      byDate[d].min += lo;
-      byDate[d].max += hi;
-    }
+    if (!d) return;
+    if (!byDate[d]) byDate[d] = { budget: 0, paid: 0 };
+    byDate[d].budget += +r['预算(¥)'] || 0;
+    byDate[d].paid += +r['实际支付(¥)'] || 0;
   });
 
   document.getElementById('budget-summary').innerHTML = `
     <div class="stat-card">
-      <div class="label">全程预估（人均）</div>
-      <div class="value">RM ${summary ? summary['费用下限(RM)'] : '—'}–${summary ? summary['费用上限(RM)'] : '—'}</div>
-      <div class="sub">${summary ? esc(summary['备注']) : ''}</div>
+      <div class="label">吉隆坡段预算合计</div>
+      <div class="value">¥ ${fmtNum(totalBudget)}</div>
+      <div class="sub">已支付 ¥ ${fmtNum(totalPaid || null)}</div>
     </div>
     ${Object.entries(byDate).map(([d, v]) => `
       <div class="stat-card">
-        <div class="label">${esc(d)} 餐饮门票等</div>
-        <div class="value">RM ${v.min}–${v.max}</div>
-        <div class="sub">人均项合计</div>
+        <div class="label">${esc(d)} 当日预算</div>
+        <div class="value">¥ ${fmtNum(v.budget)}</div>
+        <div class="sub">${v.paid ? `已支付 ¥ ${fmtNum(v.paid)}` : '待支付'}</div>
       </div>`).join('')}
   `;
 
-  const cols = ['日期', '类别', '项目', '费用下限(RM)', '费用上限(RM)', '人均/合计', '备注'];
-  document.getElementById('budget-table').innerHTML = tableHtml(trip.budget, cols);
+  const cols = ['日期', '类别', '项目', '说明', '预算(¥)', '实际支付(¥)', '可选'];
+  document.getElementById('budget-table').innerHTML = tableHtml(trip.budget, cols, { moneyCols: ['预算(¥)', '实际支付(¥)'] });
 
   renderFullBudget();
 }
@@ -437,8 +435,8 @@ function renderFullBudget() {
 
   document.getElementById('full-budget-summary').innerHTML = `
     ${totalRow ? `<div class="stat-card">
-      <div class="label">全程预算合计</div>
-      <div class="value">¥ ${fmtNum(totalRow['预估上限(¥)'])}</div>
+      <div class="label">7天全程预算合计</div>
+      <div class="value">¥ ${fmtNum(totalRow['预算(¥)'])}</div>
       <div class="sub">已支付 ¥ ${fmtNum(totalRow['实际支付(¥)'])}</div>
     </div>` : ''}
     ${hintRow ? `<div class="stat-card">
@@ -446,8 +444,8 @@ function renderFullBudget() {
       <div class="value" style="font-size:1rem;line-height:1.4">${esc(hintRow['分类'])}</div>
     </div>` : ''}`;
 
-  const cols = ['分类', '项目', '说明', '预估上限(¥)', '实际支付(¥)', '可选', '是否已订'];
-  document.getElementById('full-budget-table').innerHTML = tableHtml(detailRows, cols);
+  const cols = ['分类', '项目', '说明', '预算(¥)', '实际支付(¥)', '可选', '状态'];
+  document.getElementById('full-budget-table').innerHTML = tableHtml(detailRows, cols, { moneyCols: ['预算(¥)', '实际支付(¥)'] });
 }
 
 function fmtNum(n) {
@@ -506,9 +504,15 @@ function renderPrep() {
   });
 }
 
-function tableHtml(rows, cols) {
+function tableHtml(rows, cols, { moneyCols = [] } = {}) {
+  const cell = (col, val) => {
+    if (moneyCols.includes(col)) {
+      return val == null || val === '' ? '—' : `¥ ${fmtNum(val)}`;
+    }
+    return esc(val ?? '—');
+  };
   return `<table><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead>
-    <tbody>${rows.map((r) => `<tr>${cols.map((c) => `<td>${esc(r[c] ?? '—')}</td>`).join('')}</tr>`).join('')}
+    <tbody>${rows.map((r) => `<tr>${cols.map((c) => `<td>${cell(c, r[c])}</td>`).join('')}</tr>`).join('')}
     </tbody></table>`;
 }
 
