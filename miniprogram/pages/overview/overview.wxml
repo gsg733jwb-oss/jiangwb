@@ -1,0 +1,8 @@
+<view class="page">
+  <view wx:for="{{cards}}" wx:key="date" class="card">
+    <text class="h3">{{item.date}} {{item.week}} · {{item.theme}}</text>
+    <text class="muted">住宿 {{item.hotel}}</text>
+    <text>{{item.activity}}</text>
+    <text class="tag">{{item.note}}</text>
+  </view>
+</view>

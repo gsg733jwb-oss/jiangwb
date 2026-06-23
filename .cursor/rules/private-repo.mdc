@@ -1,0 +1,26 @@
+---
+description: Gitee 私有备份；GitHub 公开仓仅用于 Pages 发布网页
+alwaysApply: true
+---
+
+# 仓库与发布约定
+
+## 可见性
+
+| 远程 | 用途 | 可见性 |
+|------|------|--------|
+| Gitee `origin` | **私有备份**（完整代码、脚本、小程序） | 私有 |
+| GitHub `github` | **对外网页**（GitHub Pages，免费版需公开仓） | 公开仓 |
+
+GitHub 免费账户的 **私有仓无法启用 Pages**，因此 GitHub 仓为公开，但日常开发备份优先推 Gitee。
+
+## Agent 行为
+
+- 默认 `git push` → Gitee `origin`（私有）。
+- 更新对外网页 → `./scripts/push_guide.sh --github`（触发 Pages 部署）。
+- 未经用户同意不要 push。
+- 桌面「马泰攻略」Excel、机票监控日志勿提交；`data/trip.json` 会随网页公开。
+
+## 公开地址
+
+https://gsg733jwb-oss.github.io/jiangwb/

@@ -1,0 +1,30 @@
+.page { padding: 20rpx; padding-bottom: 40rpx; }
+.top { margin-bottom: 20rpx; }
+.top-row { display: flex; justify-content: space-between; gap: 16rpx; margin-bottom: 16rpx; }
+.title { display: block; font-size: 34rpx; font-weight: 700; }
+.top-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8rpx; }
+.pill { background: #1f2937; padding: 6rpx 12rpx; border-radius: 999rpx; font-size: 22rpx; }
+.switch .on { color: #34d399; font-weight: 700; }
+.link { color: #4d9fff; font-size: 24rpx; }
+.day-bar { white-space: nowrap; margin: 12rpx 0; }
+.day-btn { display: inline-block; vertical-align: top; padding: 12rpx 18rpx; margin-right: 12rpx; border-radius: 12rpx; background: #1a2332; border: 1px solid #2a3548; }
+.day-btn.active { border-color: #4d9fff; background: rgba(77,159,255,.12); }
+.d-num { display: block; font-weight: 700; font-size: 26rpx; }
+.d-date { display: block; font-size: 22rpx; color: #8b9cb3; }
+.h2 { display: block; font-size: 30rpx; font-weight: 700; margin-top: 8rpx; }
+.progress-wrap { display: flex; align-items: center; gap: 12rpx; margin-top: 12rpx; }
+.progress-track { flex: 1; height: 10rpx; background: #1f2937; border-radius: 999rpx; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg,#4d9fff,#34d399); }
+.t-item.now .t-card { border-color: #34d399; }
+.t-top { display: flex; flex-wrap: wrap; gap: 8rpx; align-items: center; margin-bottom: 8rpx; }
+.t-time { font-weight: 700; }
+.t-title { display: block; font-size: 30rpx; font-weight: 700; margin-bottom: 6rpx; }
+.note { display: block; margin-top: 8rpx; font-size: 24rpx; color: #b6c2d1; }
+.map-toggle { margin-top: 12rpx; padding: 12rpx; border-radius: 12rpx; background: rgba(52,211,153,.08); border: 1px solid rgba(52,211,153,.25); }
+.sub-toggle { margin-top: 12rpx; color: #4d9fff; font-size: 24rpx; }
+.sub-row { padding: 10rpx 0; border-top: 1px solid #2a3548; font-size: 24rpx; }
+.sub-row.now { color: #34d399; }
+.sub-time { margin-right: 12rpx; font-weight: 600; }
+.section-title { font-weight: 700; color: #4d9fff; }
+.done-btn { margin-top: 12rpx; background: #1f2937; color: #e8edf4; }
+.done-btn.done { background: rgba(52,211,153,.2); color: #34d399; }

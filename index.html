@@ -71,33 +71,8 @@
           </div>
         </div>
       </div>
-      <div class="flow-split">
-        <div class="flow-panel">
-          <div class="timeline" id="timeline"></div>
-        </div>
-        <div class="map-panel">
-          <div class="map-panel-head">
-            <h3>上 · 现 · 下</h3>
-            <p id="route-status" class="route-status muted">点击行程查看前后站</p>
-          </div>
-          <div id="map-placeholder" class="map-placeholder">
-            <p class="map-placeholder-text">展开地图查看三站位置</p>
-            <p class="map-placeholder-sub muted">灰·绿·橙标点 · 按需加载</p>
-            <button type="button" class="map-open-btn" id="map-open-btn">查看地图</button>
-          </div>
-          <div id="map-body" class="map-body is-hidden">
-            <div class="map-toolbar">
-              <button type="button" class="map-btn" id="map-zoom-in" title="放大">＋</button>
-              <button type="button" class="map-btn" id="map-zoom-out" title="缩小">－</button>
-              <button type="button" class="map-btn" id="map-fit-btn" title="缩放到当前三站">适配</button>
-              <button type="button" class="map-btn" id="map-reset-btn" title="吉隆坡全览">全览</button>
-              <button type="button" class="map-btn map-close-btn" id="map-close-btn" title="收起地图">收起</button>
-            </div>
-            <div id="trip-map" class="trip-map"></div>
-            <p id="map-hint" class="map-hint">双指缩放 · 拖动平移</p>
-            <p id="map-toast" class="map-toast" aria-live="polite"></p>
-          </div>
-        </div>
+      <div class="flow-panel">
+        <div class="timeline" id="timeline"></div>
       </div>
     </section>
 
@@ -147,8 +122,9 @@
   </button>
 
   <script src="data/trip.inline.js"></script>
+  <script src="data/places.inline.js"></script>
   <script src="vendor/leaflet/leaflet.js"></script>
-  <script src="map.js"></script>
-  <script src="app.js"></script>
+  <script src="map.js?v=20260623"></script>
+  <script src="app.js?v=20260623"></script>
 </body>
 </html>

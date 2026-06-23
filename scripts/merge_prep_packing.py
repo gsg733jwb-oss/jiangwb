@@ -2,13 +2,17 @@
 """合并「行前准备」与「出行全清单」为一张工作表。"""
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.styles.colors import Color
 
-EXCEL = Path.home() / 'Desktop' / 'KL_Travel_Guide_2026-07-12_to_15.xlsx'
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from paths import TRIP_EXCEL, migrate_legacy_files  # noqa: E402
+
+EXCEL = TRIP_EXCEL
 SHEET_NAME = '行前准备与携带清单'
 OLD_SHEETS = ('行前准备', '出行全清单')
 
@@ -117,6 +121,7 @@ def write_merged_sheet(ws, data_rows):
 
 
 def main():
+    migrate_legacy_files()
     wb = openpyxl.load_workbook(EXCEL)
     prep_ws = wb['行前准备']
     pack_ws = wb['出行全清单']

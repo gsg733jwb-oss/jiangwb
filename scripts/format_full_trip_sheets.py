@@ -2,12 +2,16 @@
 """完善并统一「7天全预算」「行前准备与携带清单」格式，与现有工作簿风格一致。"""
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-EXCEL = Path.home() / 'Desktop' / 'KL_Travel_Guide_2026-07-12_to_15.xlsx'
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from paths import TRIP_EXCEL, migrate_legacy_files  # noqa: E402
+
+EXCEL = TRIP_EXCEL
 
 # ── 配色（与现有表一致）──
 HEADER_FILL = PatternFill('solid', fgColor='1F4E79')
@@ -45,10 +49,10 @@ CAT_FILL = {
 }
 
 BUDGET_ROWS = [
-    ('大交通', '上海 → 普吉（3人）', '7/9 春秋；含20kg行李', 2000, 1844, '', '已订'),
+    ('大交通', '上海 → 普吉（3人）', '7/9 07:45 9C8665 春秋；含20kg行李', 2000, 1844, '', '已订'),
     ('大交通', '机票行李/选座补差（普吉段）', '第二笔支付', 1500, 1188, '', '已订'),
-    ('大交通', '普吉 → 吉隆坡（3人）', '7/12 早班；亚航', 2000, 1669, '', '已订'),
-    ('大交通', '吉隆坡 → 上海（3人）', '7/15 红眼；含税费', 4500, 4100, '', '已订'),
+    ('大交通', '普吉 → 吉隆坡（3人）', '7/12 11:10 AK833 亚航', 2000, 1669, '', '已订'),
+    ('大交通', '吉隆坡 → 上海（3人）', '7/15 18:40 D7330 亚航X；含税费', 4500, 4100, '', '已订'),
     ('住宿', '普吉芭东万怡 × 3晚', '7/9-7/11；1间含早', 2800, 2500, '', '已订'),
     ('住宿', 'Moxy Chinatown × 2晚', '7/12-7/13；老城', 1100, 900, '', '已订'),
     ('住宿', 'Imperial Lexis × 1晚', '7/14；KLCC无边泳池', 1600, 1400, '', '已订'),
@@ -260,6 +264,7 @@ def set_tab_colors(wb):
 
 
 def main():
+    migrate_legacy_files()
     wb = openpyxl.load_workbook(EXCEL)
     format_budget_sheet(wb['7天全预算'])
     set_tab_colors(wb)

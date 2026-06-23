@@ -1,0 +1,48 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/flow/flow",
+    "pages/overview/overview",
+    "pages/food/food",
+    "pages/budget/budget",
+    "pages/prep/prep",
+    "pages/map-route/map-route"
+  ],
+  "window": {
+    "navigationBarTitleText": "出行攻略",
+    "navigationBarBackgroundColor": "#0b0f14",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#0b0f14",
+    "backgroundTextStyle": "light"
+  },
+  "tabBar": {
+    "color": "#8b9cb3",
+    "selectedColor": "#4d9fff",
+    "backgroundColor": "#121820",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/flow/flow",
+        "text": "行程"
+      },
+      {
+        "pagePath": "pages/overview/overview",
+        "text": "总览"
+      },
+      {
+        "pagePath": "pages/food/food",
+        "text": "美食"
+      },
+      {
+        "pagePath": "pages/budget/budget",
+        "text": "预算"
+      },
+      {
+        "pagePath": "pages/prep/prep",
+        "text": "行前"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

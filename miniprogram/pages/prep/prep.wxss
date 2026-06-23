@@ -1,0 +1,5 @@
+.page { padding: 24rpx; }
+.h2 { display: block; font-size: 34rpx; font-weight: 700; }
+.section { display: block; margin: 24rpx 0 8rpx; color: #4d9fff; font-weight: 700; }
+.cat { display: block; margin: 12rpx 0 6rpx; color: #8b9cb3; }
+.row.done { opacity: .65; }

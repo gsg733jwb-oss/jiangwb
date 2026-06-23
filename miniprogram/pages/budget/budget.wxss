@@ -1,0 +1,2 @@
+.page { padding: 24rpx; }
+.h3 { display: block; font-weight: 700; margin-bottom: 6rpx; }

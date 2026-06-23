@@ -1,12 +1,33 @@
 #!/usr/bin/env python3
-"""Export KL travel Excel to data/trip.json for the web app."""
+"""Export KL travel Excel to web + miniprogram data bundles."""
+import argparse
 import json
 import re
+import sys
+from datetime import datetime
+
 import openpyxl
 from pathlib import Path
 
-EXCEL = Path.home() / 'Desktop' / 'KL_Travel_Guide_2026-07-12_to_15.xlsx'
-OUT = Path(__file__).resolve().parent.parent / 'data' / 'trip.json'
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from paths import (  # noqa: E402
+    MP_ALL_PLACES,
+    MP_ALL_TRIPS,
+    MP_DATA_DIR,
+    MP_MANIFEST,
+    PLACES_JSON,
+    WEB_DATA_DIR,
+    WEB_DATA_INLINE,
+    WEB_DATA_OUT,
+    ensure_dirs,
+    migrate_legacy_files,
+)
+from trip_config import (  # noqa: E402
+    excel_for_trip,
+    load_trip_config,
+    resolve_active_trip,
+    sync_manifest,
+)
 
 
 def sheet_to_dict(ws, header_row=1):
@@ -78,7 +99,6 @@ def derive_food_dist(restaurants):
 
 
 def export_merged_budget(ws):
-    """Read combined 预算 sheet (7天全预算 + 预算明细 + 行前准备)."""
     title = str(ws.cell(1, 1).value or '7天全程预算').strip()
     subtitle = str(ws.cell(2, 1).value or '').strip()
     total_budget = ws.cell(5, 6).value
@@ -167,7 +187,6 @@ def export_merged_budget(ws):
 
 
 def export_day_sheet(ws):
-    """Day sheets: column A = 显示 (1主/2次), headers from row 1 column B+."""
     headers = []
     for c in range(2, ws.max_column + 1):
         h = ws.cell(1, c).value
@@ -186,6 +205,8 @@ def export_day_sheet(ws):
             v = ws.cell(r, c).value
             if v is not None and str(v).strip():
                 empty = False
+            if h in ('坐标起', '坐标落') and isinstance(v, str):
+                v = v.strip().rstrip(',，')
             row[h] = v
 
         if empty:
@@ -200,18 +221,15 @@ def export_food_rankings(ws):
     sections = []
     current = None
     headers = None
-
     for r in range(1, ws.max_row + 1):
         a = ws.cell(r, 1).value
-        if a is None:
+        if not a:
             continue
         text = str(a).strip()
-        if text.startswith('【'):
+        if text.startswith('【') and 'Top' in text:
             current = {'title': text, 'items': []}
             sections.append(current)
             headers = None
-            continue
-        if current is None:
             continue
         if text == '排名':
             headers = [ws.cell(r, c).value for c in range(1, ws.max_column + 1)]
@@ -227,8 +245,7 @@ def export_food_rankings(ws):
     return sections
 
 
-def main():
-    wb = openpyxl.load_workbook(EXCEL, data_only=True)
+def export_workbook(wb, trip_id: str, meta: dict) -> dict:
     restaurants = sheet_to_dict(wb['美食餐厅'])
 
     if '预算' in wb.sheetnames:
@@ -245,8 +262,12 @@ def main():
     )
 
     out = {
-        'title': '吉隆坡之旅 2026.7.12-15',
-        'subtitle': '7天6晚 · 普吉 + 吉隆坡 · 2大1小',
+        'id': trip_id,
+        'title': meta.get('title') or '出行攻略',
+        'subtitle': meta.get('subtitle') or '',
+        'timezone': meta.get('timezone') or 'Asia/Shanghai',
+        'dateStart': meta.get('dateStart'),
+        'dateEnd': meta.get('dateEnd'),
         'overview': sheet_to_dict(wb['行程总览']),
         'days': {},
         'foodDist': food_dist,
@@ -260,15 +281,80 @@ def main():
     for name in wb.sheetnames:
         if name.startswith('Day'):
             out['days'][name.replace('Day', '').strip()] = export_day_sheet(wb[name])
+    return out
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
+
+def _load_json(path: Path) -> dict:
+    if path.is_file():
+        return json.loads(path.read_text(encoding='utf-8'))
+    return {}
+
+
+def sync_miniprogram_bundle(trip_id: str, trip_data: dict, cfg: dict, updated_at: str) -> None:
+    MP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    all_trips = _load_json(MP_ALL_TRIPS)
+    all_trips[trip_id] = trip_data
+    MP_ALL_TRIPS.write_text(
+        json.dumps(all_trips, ensure_ascii=False, indent=2, default=str) + '\n',
+        encoding='utf-8',
+    )
+
+    places = []
+    if PLACES_JSON.is_file():
+        places = json.loads(PLACES_JSON.read_text(encoding='utf-8'))
+    all_places = _load_json(MP_ALL_PLACES)
+    all_places[trip_id] = places
+    MP_ALL_PLACES.write_text(
+        json.dumps(all_places, ensure_ascii=False, indent=2) + '\n',
+        encoding='utf-8',
+    )
+
+    meta = cfg['trips'][trip_id]
+    manifest = sync_manifest(cfg, trip_id, meta, updated_at)
+    MP_MANIFEST.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + '\n',
+        encoding='utf-8',
+    )
+
+
+def main():
+    parser = argparse.ArgumentParser(description='从 Excel 导出行程到网页与小程序')
+    parser.add_argument('--trip-id', help='指定 trip.config 中的行程 id')
+    args = parser.parse_args()
+
+    migrate_legacy_files()
+    ensure_dirs()
+    cfg = load_trip_config()
+    trip_id, meta = resolve_active_trip(cfg, args.trip_id)
+    excel = excel_for_trip(meta)
+
+    wb = openpyxl.load_workbook(excel, data_only=True)
+    out = export_workbook(wb, trip_id, meta)
+    updated_at = datetime.now().strftime('%Y-%m-%d %H:%M')
+
     text = json.dumps(out, ensure_ascii=False, indent=2, default=str)
-    OUT.write_text(text, encoding='utf-8')
-    inline = OUT.parent / 'trip.inline.js'
-    inline.write_text(f'window.__TRIP_DATA__ = {text};\n', encoding='utf-8')
-    print(f'Exported → {OUT}')
-    print(f'Inline   → {inline}')
-    print(f'  days={len(out["days"])} foodRankings={len(out["foodRankings"])} fullBudget={len(out["fullBudget"]["rows"])} checklist={len(out["checklist"]["rows"])}')
+    inline_js = f'window.__TRIP_DATA__ = {text};\n'
+    WEB_DATA_OUT.parent.mkdir(parents=True, exist_ok=True)
+    WEB_DATA_OUT.write_text(text, encoding='utf-8')
+    WEB_DATA_INLINE.write_text(inline_js, encoding='utf-8')
+
+    stamp = datetime.now().strftime('%Y-%m-%d_%H%M')
+    WEB_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    (WEB_DATA_DIR / 'trip.json').write_text(text, encoding='utf-8')
+    (WEB_DATA_DIR / 'trip.inline.js').write_text(inline_js, encoding='utf-8')
+    (WEB_DATA_DIR / f'trip-{stamp}.json').write_text(text, encoding='utf-8')
+    (WEB_DATA_DIR / f'{trip_id}-trip-{stamp}.json').write_text(text, encoding='utf-8')
+
+    sync_miniprogram_bundle(trip_id, out, cfg, updated_at)
+
+    print(f'Trip ID  → {trip_id}')
+    print(f'Excel    → {excel}')
+    print(f'Web      → {WEB_DATA_OUT}')
+    print(f'MiniProg → {MP_ALL_TRIPS} (+ manifest)')
+    print(
+        f'  days={len(out["days"])} checklist={len(out["checklist"]["rows"])} '
+        f'fullBudget={len(out["fullBudget"]["rows"])}'
+    )
 
 
 if __name__ == '__main__':

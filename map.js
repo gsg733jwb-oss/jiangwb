@@ -1,83 +1,64 @@
-/** Leaflet 交互地图：按需加载 · 腾讯地图（国内）+ 备用，上 / 现 / 下 */
+/** Leaflet 地图：按 Excel「坐标起 / 坐标落」显示每段路线 */
 
-const COORD_STORE_KEY = 'kl-coords';
-let coordOverrides = JSON.parse(localStorage.getItem(COORD_STORE_KEY) || '{}');
 let PLACES_DATA = [];
 
-function coordStorageKey(dayKey, idx) {
-  return `${dayKey}::${idx}`;
+function normalizeLabel(label) {
+  return String(label || '').trim().replace(/[,，\s]+$/g, '').toLowerCase();
 }
 
-function getCoordOverride(dayKey, idx) {
-  const v = coordOverrides[coordStorageKey(dayKey, idx)];
-  if (!v || v.lat == null || v.lng == null) return null;
-  return { lat: +v.lat, lng: +v.lng };
-}
+function resolvePlaceByLabel(label) {
+  if (!label) return null;
+  const text = normalizeLabel(label);
+  if (!text) return null;
 
-function setCoordOverride(dayKey, idx, lat, lng) {
-  const la = +lat;
-  const ln = +lng;
-  if (!Number.isFinite(la) || !Number.isFinite(ln)) return false;
-  coordOverrides[coordStorageKey(dayKey, idx)] = { lat: la, lng: ln };
-  localStorage.setItem(COORD_STORE_KEY, JSON.stringify(coordOverrides));
-  return true;
-}
-
-function clearCoordOverride(dayKey, idx) {
-  delete coordOverrides[coordStorageKey(dayKey, idx)];
-  localStorage.setItem(COORD_STORE_KEY, JSON.stringify(coordOverrides));
-}
-
-function adjacentScheduleIndex(items, idx, dir) {
-  const step = dir === 'prev' ? -1 : 1;
-  for (let j = idx + step; j >= 0 && j < items.length; j += step) {
-    if (!isDividerRow(items[j])) return j;
+  for (const p of PLACES_DATA) {
+    if (normalizeLabel(p.name) === text) return { ...p, title: label };
   }
-  return -1;
+
+  let best = null;
+  let bestScore = 0;
+  for (const p of PLACES_DATA) {
+    const name = normalizeLabel(p.name);
+    if (text.includes(name) || name.includes(text)) {
+      const score = name.length;
+      if (score > bestScore) { bestScore = score; best = { ...p, title: label }; }
+    }
+    for (const kw of p.keywords) {
+      const kl = kw.toLowerCase();
+      if ((text.includes(kl) || kl.includes(text)) && kl.length > bestScore) {
+        bestScore = kl.length;
+        best = { ...p, title: label };
+      }
+    }
+  }
+  return best;
 }
 
-function getCoordsForItem(dayKey, idx, item, items) {
-  const manual = getCoordOverride(dayKey, idx);
-  if (manual) return { ...manual, title: rowTitle(item), manual: true };
-  const place = resolvePlace(item);
-  if (place) return { lat: place.lat, lng: place.lng, title: place.title || rowTitle(item), manual: false };
-  return null;
-}
-
-function copyCoordsFromAdjacent(dayKey, idx, items, dir) {
-  const adj = adjacentScheduleIndex(items, idx, dir);
-  if (adj < 0) return { ok: false, msg: dir === 'prev' ? '没有上一站' : '没有下一站' };
-  const c = getCoordsForItem(dayKey, adj, items[adj], items);
-  if (!c) return { ok: false, msg: '相邻站点暂无坐标' };
-  setCoordOverride(dayKey, idx, c.lat, c.lng);
-  return { ok: true, coords: c };
+function segmentEndpoints(item) {
+  const fromLabel = item['坐标起'];
+  const toLabel = item['坐标落'];
+  const from = fromLabel ? resolvePlaceByLabel(fromLabel) : null;
+  const to = toLabel ? resolvePlaceByLabel(toLabel) : null;
+  return { fromLabel, toLabel, from, to };
 }
 
 async function loadPlacesData() {
+  if (PLACES_DATA.length) return;
   try {
     const res = await fetch('data/places.json');
     if (res.ok) PLACES_DATA = await res.json();
   } catch {
-    /* file:// 或离线时保留空列表，依赖手动坐标 */
+    /* 离线时 places.json 可能不可用 */
+  }
+  if (!PLACES_DATA.length && Array.isArray(window.__PLACES_DATA__)) {
+    PLACES_DATA = window.__PLACES_DATA__;
   }
 }
 
-function refreshMapRoute() {
-  if (!pendingRoute) return;
-  const { items, clickIdx, dayKey } = pendingRoute;
-  drawTriple(items, clickIdx, dayKey);
+if (Array.isArray(window.__PLACES_DATA__) && window.__PLACES_DATA__.length) {
+  PLACES_DATA = window.__PLACES_DATA__;
 }
-
-window.TripCoords = {
-  get: getCoordsForItem,
-  set: setCoordOverride,
-  clear: clearCoordOverride,
-  copyPrev: (dayKey, idx, items) => copyCoordsFromAdjacent(dayKey, idx, items, 'prev'),
-  copyNext: (dayKey, idx, items) => copyCoordsFromAdjacent(dayKey, idx, items, 'next'),
-  refresh: refreshMapRoute,
-};
-
-loadPlacesData().then(() => refreshMapRoute());
+loadPlacesData();
 
 const PIN = {
   prev: { color: '#64748b', label: '上', size: 28 },
@@ -91,8 +72,16 @@ const KL_CENTER = [3.12, 101.68];
 const IMAGE_BOUNDS = [[2.62, 101.52], [3.22, 101.78]];
 const ROLE_ANGLE = { prev: -Math.PI / 2, next: Math.PI / 6, curr: (Math.PI * 5) / 6 };
 
-/** 国内可访问：Esri 主图（海外区域有内容）+ 腾讯备用 + 本地底图 */
+/** 国内可访问：高德主图 + Esri 海外 + 腾讯备用 + 本地底图 */
 const TILE_PROVIDERS = [
+  {
+    id: 'amap',
+    label: '高德地图',
+    url: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+    subdomains: '1234',
+    attribution: '© 高德',
+    maxZoom: 18,
+  },
   {
     id: 'esri-street',
     label: '街道图',
@@ -483,57 +472,162 @@ function initFlowMap() {
   });
 }
 
-function isMapOpen() {
-  return mapOpen;
-}
+function openMap() {}
+function closeMap() {}
 
-function openMap() {
-  mapOpen = true;
-  document.getElementById('map-placeholder')?.classList.add('is-hidden');
-  document.getElementById('map-body')?.classList.remove('is-hidden');
+function updateFlowRoute() {}
 
-  initFlowMap();
-
-  const refresh = () => {
-    map?.invalidateSize(true);
-    if (pendingRoute) {
-      const { items, clickIdx, dayKey } = pendingRoute;
-      const { pins } = buildRouteData(items, clickIdx, dayKey);
-      renderPins(pins);
-    }
-  };
-
-  requestAnimationFrame(refresh);
-  setTimeout(refresh, 120);
-  setTimeout(refresh, 400);
-}
-
-function closeMap() {
-  mapOpen = false;
-  document.getElementById('map-placeholder')?.classList.remove('is-hidden');
-  document.getElementById('map-body')?.classList.add('is-hidden');
-}
+function isMapOpen() { return false; }
 
 function invalidateFlowMap() {
-  map?.invalidateSize();
+  window.SegmentMaps?.refresh();
 }
 
-function updateFlowRoute(items, clickIdx, dayKey) {
-  pendingRoute = { items, clickIdx, dayKey };
-  drawTriple(items, clickIdx, dayKey);
-  if (mapOpen && mapReady) {
-    requestAnimationFrame(() => map?.invalidateSize());
+/* ── 每段内嵌小地图 ── */
+
+const segmentMaps = new Map();
+
+function segPinIcon(color, label) {
+  return L.divIcon({
+    className: 'seg-pin-wrap',
+    html: `<div class="seg-pin" style="background:${color}">${label}</div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
+
+function attachAdaptiveTiles(leafletMap, el) {
+  const order = [0, 1, 2];
+  let idx = 0;
+  let layer = null;
+  let loaded = 0;
+  let errors = 0;
+  let switched = false;
+
+  function tryNext() {
+    if (idx >= order.length) {
+      const hint = el.querySelector('.segment-map-missing');
+      if (!hint) {
+        const p = document.createElement('p');
+        p.className = 'segment-map-missing segment-map-tile-warn';
+        p.textContent = '地图瓦片加载失败，请检查网络后重试';
+        el.appendChild(p);
+      }
+      return;
+    }
+    const provider = TILE_PROVIDERS[order[idx]];
+    if (layer) leafletMap.removeLayer(layer);
+    loaded = 0;
+    errors = 0;
+    const opts = {
+      maxZoom: provider.maxZoom,
+      minZoom: 3,
+      attribution: provider.attribution,
+      crossOrigin: true,
+    };
+    if (provider.subdomains) opts.subdomains = provider.subdomains;
+    layer = L.tileLayer(provider.url, opts);
+    layer.on('tileload', (e) => {
+      const tile = e.tile;
+      if (!tile || tile.naturalWidth < 64) return;
+      loaded += 1;
+      el.querySelector('.segment-map-tile-warn')?.remove();
+    });
+    layer.on('tileerror', () => {
+      errors += 1;
+      if (!switched && errors >= 3 && loaded === 0) {
+        switched = true;
+        idx += 1;
+        tryNext();
+      }
+    });
+    layer.addTo(leafletMap);
+    setTimeout(() => {
+      if (!switched && loaded < 2 && idx < order.length - 1) {
+        switched = true;
+        idx += 1;
+        tryNext();
+      }
+    }, 3500);
   }
+
+  tryNext();
 }
 
-function highlightTimelineLeg() {}
+function buildSegmentMap(el, fromLabel, toLabel) {
+  const from = fromLabel ? resolvePlaceByLabel(fromLabel) : null;
+  const to = toLabel ? resolvePlaceByLabel(toLabel) : null;
 
-function setupMapShell() {
-  bindMapControls();
+  if (!from && !to) {
+    const missing = [fromLabel, toLabel].filter(Boolean).join('、');
+    el.innerHTML = `<p class="segment-map-missing">未匹配到坐标：${missing || '请检查 Excel 与 places.json'}</p>`;
+    return null;
+  }
+
+  const leafletMap = L.map(el, {
+    zoomControl: true,
+    scrollWheelZoom: false,
+    attributionControl: false,
+    dragging: true,
+    touchZoom: true,
+  });
+
+  attachAdaptiveTiles(leafletMap, el);
+  const markers = [];
+
+  if (from) {
+    markers.push(L.marker([from.lat, from.lng], { icon: segPinIcon('#22c55e', '起') })
+      .bindTooltip(fromLabel, { direction: 'top' }).addTo(leafletMap));
+  }
+  if (to) {
+    markers.push(L.marker([to.lat, to.lng], { icon: segPinIcon('#f59e0b', '落') })
+      .bindTooltip(toLabel, { direction: 'top' }).addTo(leafletMap));
+  }
+  if (from && to) {
+    L.polyline([[from.lat, from.lng], [to.lat, to.lng]], {
+      color: '#4d9fff', weight: 3, opacity: 0.85, dashArray: '6 4',
+    }).addTo(leafletMap);
+  }
+
+  const pts = [];
+  if (from) pts.push([from.lat, from.lng]);
+  if (to) pts.push([to.lat, to.lng]);
+  if (pts.length === 1) leafletMap.setView(pts[0], 14);
+  else leafletMap.fitBounds(L.latLngBounds(pts), { padding: [28, 28], maxZoom: pts.length > 1 && Math.abs(pts[0][0] - pts[1][0]) > 2 ? 6 : 14 });
+
+  requestAnimationFrame(() => {
+    leafletMap.invalidateSize();
+    setTimeout(() => leafletMap.invalidateSize(), 120);
+  });
+  return leafletMap;
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', setupMapShell);
-} else {
-  setupMapShell();
+function destroySegmentMaps() {
+  for (const m of segmentMaps.values()) m.remove();
+  segmentMaps.clear();
 }
+
+function mountSegmentMap(el) {
+  const id = el.id;
+  if (!id || segmentMaps.has(id)) return;
+  const map = buildSegmentMap(el, el.dataset.from || '', el.dataset.to || '');
+  if (map) segmentMaps.set(id, map);
+}
+
+window.SegmentMaps = {
+  async mountAll() {
+    if (!PLACES_DATA.length) await loadPlacesData();
+    destroySegmentMaps();
+    document.querySelectorAll('.segment-map-wrap.is-open .segment-map').forEach((el) => {
+      mountSegmentMap(el);
+    });
+  },
+  async refresh() {
+    destroySegmentMaps();
+    await this.mountAll();
+  },
+  mountOne(el) {
+    mountSegmentMap(el);
+  },
+  destroy: destroySegmentMaps,
+};

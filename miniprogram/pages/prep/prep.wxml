@@ -1,0 +1,14 @@
+<view class="page">
+  <text class="h2">{{title}}</text>
+  <text class="muted">{{subtitle}}</text>
+  <block wx:for="{{groups}}" wx:key="type">
+    <text class="section">{{item.type}}</text>
+    <block wx:for="{{item.cats}}" wx:for-item="cat" wx:key="cat">
+      <text class="cat">{{cat.cat}}</text>
+      <view wx:for="{{cat.items}}" wx:key="id" class="card row {{item.done ? 'done' : ''}}" bindtap="toggle" data-id="{{item.id}}">
+        <text>{{item.done ? '☑' : '☐'}} {{item.item}}</text>
+        <text class="muted">{{item.when}} {{item.note}}</text>
+      </view>
+    </block>
+  </block>
+</view>

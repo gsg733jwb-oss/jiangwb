@@ -1,0 +1,281 @@
+window.__PLACES_DATA__ = [
+  {
+    "id": "phuket-airport",
+    "name": "普吉机场",
+    "lat": 8.1132,
+    "lng": 98.3169,
+    "type": "交通",
+    "keywords": [
+      "普吉机场",
+      "普吉国际机场",
+      "HKT",
+      "Phuket Airport"
+    ]
+  },
+  {
+    "id": "klia",
+    "name": "吉隆坡国际机场 KLIA",
+    "lat": 2.7456,
+    "lng": 101.7099,
+    "type": "交通",
+    "keywords": [
+      "KLIA",
+      "吉隆坡国际机场",
+      "国际机场 KLIA",
+      "吉隆坡机场"
+    ]
+  },
+  {
+    "id": "moxy",
+    "name": "Moxy Chinatown",
+    "lat": 3.1415,
+    "lng": 101.6978,
+    "type": "酒店",
+    "keywords": [
+      "Moxy",
+      "MOXY Chinatown",
+      "Moxy Chinatown",
+      "Hang Lekiu",
+      "唐人街酒店"
+    ]
+  },
+  {
+    "id": "petaling",
+    "name": "茨厂街",
+    "lat": 3.144,
+    "lng": 101.6969,
+    "type": "景点",
+    "keywords": [
+      "茨厂街",
+      "Petaling",
+      "Jalan Petaling",
+      "Jalan Petaling入口",
+      "唐人街",
+      "关帝庙",
+      "仙四师爷庙",
+      "牌坊"
+    ]
+  },
+  {
+    "id": "central-market",
+    "name": "中央艺术坊",
+    "lat": 3.1454,
+    "lng": 101.6956,
+    "type": "景点",
+    "keywords": [
+      "中央艺术坊",
+      "Hang Kasturi",
+      "艺术坊"
+    ]
+  },
+  {
+    "id": "masjid-jamek",
+    "name": "占美清真寺",
+    "lat": 3.1493,
+    "lng": 101.6967,
+    "type": "景点",
+    "keywords": [
+      "占美清真寺",
+      "Jamek",
+      "River of Life"
+    ]
+  },
+  {
+    "id": "merdeka",
+    "name": "独立广场",
+    "lat": 3.149,
+    "lng": 101.6939,
+    "type": "景点",
+    "keywords": [
+      "独立广场",
+      "苏丹阿都沙末",
+      "苏丹阿都沙末大厦",
+      "圣玛丽",
+      "I♥KL",
+      "城市画廊",
+      "Merdeka"
+    ]
+  },
+  {
+    "id": "pavilion",
+    "name": "Pavilion KL",
+    "lat": 3.1492,
+    "lng": 101.7132,
+    "type": "购物",
+    "keywords": [
+      "Pavilion",
+      "Pavilion KL",
+      "武吉免登",
+      "Bukit Bintang",
+      "168 Jln"
+    ]
+  },
+  {
+    "id": "madam-kwans",
+    "name": "Madam Kwan's Pavilion",
+    "lat": 3.149,
+    "lng": 101.7128,
+    "type": "餐饮",
+    "keywords": [
+      "Madam Kwan",
+      "Madam Kwan's"
+    ]
+  },
+  {
+    "id": "durian-bros",
+    "name": "Durian Bros 榴莲兄弟",
+    "lat": 3.1478,
+    "lng": 101.7103,
+    "type": "餐饮",
+    "keywords": [
+      "Durian Bros",
+      "榴莲兄弟",
+      "榴莲"
+    ]
+  },
+  {
+    "id": "sunway-lagoon",
+    "name": "双威水上乐园",
+    "lat": 3.0699,
+    "lng": 101.6066,
+    "type": "乐园",
+    "keywords": [
+      "Sunway Lagoon",
+      "双威乐园",
+      "双威水上乐园",
+      "水上乐园入口",
+      "更衣室或出口",
+      "PJS 11/15"
+    ]
+  },
+  {
+    "id": "sunway-pyramid",
+    "name": "Sunway Pyramid",
+    "lat": 3.0722,
+    "lng": 101.6074,
+    "type": "购物",
+    "keywords": [
+      "Sunway Pyramid",
+      "双威金字塔",
+      "A'Decade",
+      "Food Court"
+    ]
+  },
+  {
+    "id": "adecade",
+    "name": "A'Decade",
+    "lat": 3.0722,
+    "lng": 101.6074,
+    "type": "餐饮",
+    "keywords": [
+      "A'Decade",
+      "Decade"
+    ]
+  },
+  {
+    "id": "imperial-lexis",
+    "name": "Imperial Lexis",
+    "lat": 3.1512,
+    "lng": 101.7145,
+    "type": "酒店",
+    "keywords": [
+      "Imperial Lexis",
+      "Kia Peng"
+    ]
+  },
+  {
+    "id": "klcc-park",
+    "name": "KLCC公园",
+    "lat": 3.1578,
+    "lng": 101.7113,
+    "type": "景点",
+    "keywords": [
+      "KLCC公园",
+      "城中城公园",
+      "Loke Yew"
+    ]
+  },
+  {
+    "id": "village-park",
+    "name": "Village Park",
+    "lat": 3.1308,
+    "lng": 101.6234,
+    "type": "餐饮",
+    "keywords": [
+      "Village Park",
+      "Village Park Restaurant",
+      "Damansara Utama",
+      "SS 21/37"
+    ]
+  },
+  {
+    "id": "petronas",
+    "name": "国油双峰塔",
+    "lat": 3.1578,
+    "lng": 101.712,
+    "type": "景点",
+    "keywords": [
+      "双峰塔",
+      "双峰塔入口",
+      "国油双峰塔",
+      "Petronas",
+      "Twin Towers",
+      "Skybridge",
+      "观景台"
+    ]
+  },
+  {
+    "id": "aquaria",
+    "name": "KLCC水族馆",
+    "lat": 3.154,
+    "lng": 101.7118,
+    "type": "景点",
+    "keywords": [
+      "水族馆",
+      "KLCC水族馆",
+      "Aquaria",
+      "海底隧道"
+    ]
+  },
+  {
+    "id": "feifei-crab",
+    "name": "肥肥蟹",
+    "lat": 3.1492,
+    "lng": 101.713,
+    "type": "餐饮",
+    "keywords": [
+      "肥肥蟹",
+      "Fei Fei",
+      "Pavilion Elite"
+    ]
+  },
+  {
+    "id": "redai",
+    "name": "热带 ReDai",
+    "lat": 3.1345,
+    "lng": 101.715,
+    "type": "餐饮",
+    "keywords": [
+      "ReDai",
+      "热带",
+      "热带肉骨茶",
+      "肉骨茶",
+      "Thambi",
+      "Pudu"
+    ]
+  },
+  {
+    "id": "suria-klcc",
+    "name": "Suria KLCC",
+    "lat": 3.1575,
+    "lng": 101.7118,
+    "type": "购物",
+    "keywords": [
+      "Suria KLCC",
+      "Chipster",
+      "伴手礼",
+      "7-Eleven",
+      "KK Mart"
+    ]
+  }
+];

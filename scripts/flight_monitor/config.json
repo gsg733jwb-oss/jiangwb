@@ -1,0 +1,67 @@
+{
+  "year": 2026,
+  "passengers": 1,
+  "top_n": 5,
+  "routes": [
+    {
+      "id": "sha_hkt",
+      "label": "上海 → 普吉岛",
+      "date": "07-09",
+      "from_airport": "pvg",
+      "to_airport": "hkt",
+      "from_name": "上海浦东",
+      "to_name": "普吉岛",
+      "booked_flights": ["9C8665"],
+      "departure_window": ["06:00", "09:59"]
+    },
+    {
+      "id": "hkt_kul",
+      "label": "普吉岛 → 吉隆坡",
+      "date": "07-12",
+      "from_airport": "hkt",
+      "to_airport": "kul",
+      "from_name": "普吉岛",
+      "to_name": "吉隆坡",
+      "booked_flights": ["AK833"],
+      "departure_window": ["10:30", "12:30"]
+    },
+    {
+      "id": "kul_sha",
+      "label": "吉隆坡 → 上海",
+      "date": "07-15",
+      "from_airport": "kul",
+      "to_airport": "pvg",
+      "from_name": "吉隆坡",
+      "to_name": "上海浦东",
+      "booked_flights": ["9C6524", "D7330", "AK7330"],
+      "departure_window": ["17:30", "19:30"]
+    }
+  ],
+  "sources": {
+    "primary": "ctrip_safari",
+    "fallback": ""
+  },
+  "ctrip": {
+    "wait_seconds": 28,
+    "retries": 1,
+    "osascript_timeout": 100,
+    "search_url": "https://flights.ctrip.com/international/search/oneway-{from}-{to}?depdate={date}&cabin=y_s&adult={adults}"
+  },
+  "notify": {
+    "imessage_recipient": "gsg733jbb@hotmail.com",
+    "enabled": true
+  },
+  "record": {
+    "desktop_dir": "~/Desktop/马泰攻略/机票监控",
+    "markdown_file": "机票监控记录.md",
+    "excel_file": "机票监控.xlsx",
+    "json_log_dir": "~/Desktop/马泰攻略/机票监控/日志",
+    "price_change_threshold": 50
+  },
+  "schedule": {
+    "start_hour": 9,
+    "end_hour": 23,
+    "interval_hours": 2,
+    "times": ["09:00", "11:00", "13:00", "15:00", "17:00", "19:00", "21:00", "23:00"]
+  }
+}

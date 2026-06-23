@@ -1,0 +1,13 @@
+<view class="page">
+  <view wx:for="{{rows}}" wx:key="index" class="card">
+    <text class="h3">{{item['日期']}} {{item['餐次']}} · {{item['餐厅']}}</text>
+    <text>必点 {{item['必点']}}</text>
+    <text class="muted">RM {{item['人均RM']}}</text>
+  </view>
+  <view class="section">餐厅详情</view>
+  <view wx:for="{{restaurants}}" wx:key="餐厅" class="card">
+    <text class="h3">{{item['餐厅']}}</text>
+    <text class="muted">{{item['类型']}} · {{item['安排日']}}</text>
+    <text class="muted">📍 {{item['地址']}}</text>
+  </view>
+</view>

@@ -1,0 +1,8 @@
+<view class="page">
+  <text class="muted">{{title}} · {{summary}}</text>
+  <view wx:for="{{rows}}" wx:key="index" class="card">
+    <text class="h3">{{item['分类']}} · {{item['项目']}}</text>
+    <text class="muted">{{item['说明']}}</text>
+    <text>预算 ¥{{item['预算(¥)']}} / 实付 ¥{{item['实际支付(¥)']}}</text>
+  </view>
+</view>

@@ -1,0 +1,14 @@
+{
+  "defaultTripId": "kl-2026-07",
+  "activeTripId": "kl-2026-07",
+  "trips": {
+    "kl-2026-07": {
+      "excel": "KL_Travel_Guide_2026-07-12_to_15.xlsx",
+      "title": "吉隆坡之旅 2026.7.12-15",
+      "subtitle": "7天6晚 · 普吉 + 吉隆坡 · 2大1小",
+      "timezone": "Asia/Kuala_Lumpur",
+      "dateStart": "2026-07-12",
+      "dateEnd": "2026-07-15"
+    }
+  }
+}

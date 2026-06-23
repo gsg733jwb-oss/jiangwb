@@ -1,0 +1,33 @@
+page {
+  background: #0b0f14;
+  color: #e8edf4;
+  font-size: 28rpx;
+  line-height: 1.5;
+}
+
+.card {
+  background: #151c28;
+  border: 1px solid #2a3548;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.muted {
+  color: #8b9cb3;
+  font-size: 24rpx;
+}
+
+.btn-primary {
+  background: #4d9fff;
+  color: #fff;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+}
+
+.tag {
+  display: inline-block;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+  font-size: 22rpx;
+}

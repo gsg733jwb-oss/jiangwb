@@ -1,0 +1,14 @@
+<view class="page">
+  <view class="label card">{{label}}</view>
+  <map
+    class="map"
+    latitude="{{center.latitude}}"
+    longitude="{{center.longitude}}"
+    scale="{{scale}}"
+    markers="{{markers}}"
+    polyline="{{polyline}}"
+    show-location
+    enable-zoom
+    enable-scroll
+  />
+</view>

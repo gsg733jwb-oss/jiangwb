@@ -43,79 +43,46 @@ function itemId(dayKey, idx) {
   return `${dayKey}::${idx}`;
 }
 
-function formatCoords(c) {
-  if (!c) return '';
-  return `${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`;
+function segMapKey(dayKey, idx) {
+  return `map::${dayKey}::${idx}`;
 }
 
-function coordSummary(dayKey, idx, item, items) {
-  if (!window.TripCoords) return '';
-  const c = window.TripCoords.get(dayKey, idx, item, items);
-  if (!c) return '<span class="coord-missing">未设坐标</span>';
-  return `<span class="coord-val ${c.manual ? 'is-manual' : ''}">${formatCoords(c)}${c.manual ? ' · 手动' : ''}</span>`;
+function isSegMapOpen(dayKey, idx) {
+  return expandedSet.has(segMapKey(dayKey, idx));
 }
 
-function bindCoordEditors(dayKey, items) {
-  const tl = document.getElementById('timeline');
-  if (!tl || !window.TripCoords) return;
+function hasSegmentCoords(item) {
+  return !!(item['坐标起'] || item['坐标落']);
+}
 
-  tl.querySelectorAll('.coord-toggle').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const wrap = btn.closest('.coord-edit');
-      const panel = wrap?.querySelector('.coord-panel');
-      if (!panel) return;
-      const open = !panel.classList.contains('open');
-      tl.querySelectorAll('.coord-panel.open').forEach((p) => p.classList.remove('open'));
-      if (open) {
-        panel.classList.add('open');
-        const idx = +wrap.dataset.idx;
-        const c = window.TripCoords.get(dayKey, idx, items[idx], items);
-        const latIn = panel.querySelector('.coord-lat');
-        const lngIn = panel.querySelector('.coord-lng');
-        if (latIn) latIn.value = c ? c.lat : '';
-        if (lngIn) lngIn.value = c ? c.lng : '';
-      }
-    });
-  });
+function renderSegmentRouteSummary(from, to) {
+  const parts = [];
+  if (from) parts.push(`<span class="seg-from"><em>起</em>${esc(from)}</span>`);
+  if (from && to) parts.push('<span class="seg-arrow">→</span>');
+  if (to) parts.push(`<span class="seg-to"><em>落</em>${esc(to)}</span>`);
+  return parts.join('');
+}
 
-  tl.querySelectorAll('.coord-panel').forEach((panel) => {
-    panel.addEventListener('click', (e) => e.stopPropagation());
-
-    const wrap = panel.closest('.coord-edit');
-    const idx = +wrap.dataset.idx;
-
-    panel.querySelector('.coord-save')?.addEventListener('click', () => {
-      const lat = panel.querySelector('.coord-lat')?.value;
-      const lng = panel.querySelector('.coord-lng')?.value;
-      if (!window.TripCoords.set(dayKey, idx, lat, lng)) {
-        alert('请输入有效的纬度和经度');
-        return;
-      }
-      panel.classList.remove('open');
-      renderFlow();
-    });
-
-    panel.querySelector('.coord-clear')?.addEventListener('click', () => {
-      window.TripCoords.clear(dayKey, idx);
-      panel.classList.remove('open');
-      renderFlow();
-    });
-
-    panel.querySelector('.coord-copy-prev')?.addEventListener('click', () => {
-      const r = window.TripCoords.copyPrev(dayKey, idx, items);
-      if (!r.ok) { alert(r.msg); return; }
-      panel.classList.remove('open');
-      renderFlow();
-    });
-
-    panel.querySelector('.coord-copy-next')?.addEventListener('click', () => {
-      const r = window.TripCoords.copyNext(dayKey, idx, items);
-      if (!r.ok) { alert(r.msg); return; }
-      panel.classList.remove('open');
-      renderFlow();
-    });
-  });
+function renderSegmentMapBlock(meta, item, i) {
+  const from = item['坐标起'];
+  const to = item['坐标落'];
+  if (!from && !to) return '';
+  const mapId = `seg-${meta.key.replace(/[^a-zA-Z0-9]+/g, '-')}-${i}`;
+  const key = segMapKey(meta.key, i);
+  const open = isSegMapOpen(meta.key, i);
+  const summary = renderSegmentRouteSummary(from, to);
+  return `<div class="segment-map-wrap ${open ? 'is-open' : 'is-collapsed'}">
+    <button type="button" class="segment-map-toggle" data-segmap-key="${esc(key)}" aria-expanded="${open}">
+      <span class="segment-map-toggle-icon" aria-hidden="true">🗺</span>
+      <span class="segment-map-toggle-label">路线地图</span>
+      <span class="segment-map-toggle-route">${summary}</span>
+      <span class="segment-map-chevron" aria-hidden="true">${open ? '▲' : '▼'}</span>
+    </button>
+    ${open ? `<div class="segment-map-body">
+      <div class="segment-route-label">${summary}</div>
+      <div class="segment-map" id="${mapId}" data-from="${esc(from || '')}" data-to="${esc(to || '')}"></div>
+    </div>` : ''}
+  </div>`;
 }
 
 function klNow() {
@@ -303,7 +270,7 @@ function renderTimelineItem(meta, item, i, items, currentIdx, { children = [], s
 
   return `<div class="t-item ${isNow || childNow ? 'now' : ''} ${done ? 'done' : ''} ${children.length ? 'has-children' : ''}" data-idx="${i}" id="item-${i}">
     <div class="t-dot" style="border-color:${color}"></div>
-    <div class="t-card ${isStar ? 'highlight' : ''} ${children.length ? 'has-substeps' : ''} ${isSection ? 'is-section' : ''}">
+    <div class="t-card ${isStar ? 'highlight' : ''} ${children.length ? 'has-substeps' : ''} ${hasSegmentCoords(item) && !isSection ? 'has-segmap' : ''} ${isSection ? 'is-section' : ''}">
       ${isSection
         ? `<div class="section-title">${esc(sectionTitle)}</div>`
         : `<div class="t-top">
@@ -321,25 +288,8 @@ function renderTimelineItem(meta, item, i, items, currentIdx, { children = [], s
       </div>
       ${r.detail ? `<div class="t-note">${esc(r.detail)}</div>` : ''}
       ${r.note ? `<div class="t-note warn">⚠️ ${esc(r.note)}</div>` : ''}`}
+      ${!isSection && hasSegmentCoords(item) ? renderSegmentMapBlock(meta, item, i) : ''}
       ${renderSubstepsBlock(meta, i, children, currentIdx, subLabel)}
-      ${!isSection && window.TripCoords ? `<div class="coord-edit" data-idx="${i}">
-        <div class="coord-row">
-          ${coordSummary(meta.key, i, item, items)}
-          <button type="button" class="btn-sm coord-toggle">坐标</button>
-        </div>
-        <div class="coord-panel">
-          <div class="coord-fields">
-            <label>纬度 <input type="number" class="coord-lat" step="0.0001" placeholder="3.1490" /></label>
-            <label>经度 <input type="number" class="coord-lng" step="0.0001" placeholder="101.7128" /></label>
-          </div>
-          <div class="coord-actions">
-            <button type="button" class="btn-sm coord-copy-prev">同上</button>
-            <button type="button" class="btn-sm coord-copy-next">同下</button>
-            <button type="button" class="btn-sm coord-save">保存</button>
-            <button type="button" class="btn-sm coord-clear">清除</button>
-          </div>
-        </div>
-      </div>` : ''}
       ${isSection ? '' : `<div class="t-actions">
         <button class="btn-sm done-btn ${done ? 'is-done' : ''}" data-id="${id}">${done ? '✓ 已完成' : '标记完成'}</button>
       </div>`}
@@ -479,6 +429,18 @@ function renderFlow() {
     });
   });
 
+  tl.querySelectorAll('.segment-map-toggle').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = btn.dataset.segmapKey;
+      if (!key) return;
+      if (expandedSet.has(key)) expandedSet.delete(key);
+      else expandedSet.add(key);
+      saveExpanded();
+      renderFlow();
+    });
+  });
+
   tl.querySelectorAll('.substeps-preview').forEach((el) => {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -500,12 +462,15 @@ function renderFlow() {
     updateFlowRoute(items, routeFrom, meta.key);
   }
 
-  bindCoordEditors(meta.key, items);
-  updateFab();
+  if (window.SegmentMaps) {
+    requestAnimationFrame(() => {
+      window.SegmentMaps.mountAll().catch(() => {});
+    });
+  }
 
   tl.querySelectorAll('.t-item, .substep-row').forEach((el) => {
     el.addEventListener('click', (e) => {
-      if (e.target.closest('.done-btn') || e.target.closest('.coord-edit') || e.target.closest('.substeps-toggle')) return;
+      if (e.target.closest('.done-btn') || e.target.closest('.substeps-toggle') || e.target.closest('.segment-map-toggle') || e.target.closest('.segment-map-body')) return;
       const idx = el.dataset.idx;
       if (idx == null) return;
       manualRouteIdx = +idx;
@@ -513,6 +478,8 @@ function renderFlow() {
       el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
   });
+
+  updateFab();
 }
 
 function renderOverview() {
@@ -743,17 +710,8 @@ function switchView(view) {
   localStorage.setItem('kl-view', view);
   window.scrollTo({ top: 0, behavior: 'smooth' });
   updateFab();
-  if (view === 'flow') {
-    setTimeout(() => {
-      const meta = DAY_META[currentDayIdx];
-      const items = trip?.days[meta.key] || [];
-      if (items.length && typeof updateFlowRoute === 'function') {
-        updateFlowRoute(items, manualRouteIdx ?? 0, meta.key);
-      }
-      if (typeof isMapOpen === 'function' && isMapOpen() && typeof invalidateFlowMap === 'function') {
-        invalidateFlowMap();
-      }
-    }, 80);
+  if (view === 'flow' && window.SegmentMaps) {
+    setTimeout(() => window.SegmentMaps.refresh(), 120);
   }
 }
 

@@ -1,0 +1,76 @@
+<view class="page">
+  <view class="top card">
+    <view class="top-row">
+      <view>
+        <text class="title">{{title}}</text>
+        <text class="muted">{{subtitle}}</text>
+      </view>
+      <view class="top-actions">
+        <text class="pill">{{clock}}</text>
+        <view class="switch" bindtap="toggleLive">
+          <text class="{{live ? 'on' : ''}}">实时</text>
+        </view>
+        <text class="link" bindtap="goHome">换行程</text>
+      </view>
+    </view>
+    <scroll-view scroll-x class="day-bar">
+      <view wx:for="{{dayMeta}}" wx:key="key" class="day-btn {{index === dayIdx ? 'active' : ''}}" bindtap="pickDay" data-idx="{{index}}">
+        <text class="d-num">Day {{item.num}}</text>
+        <text class="d-date">{{item.label}}</text>
+      </view>
+    </scroll-view>
+    <text class="h2">{{dayHeading}}</text>
+    <text class="muted">{{daySub}}</text>
+    <view class="progress-wrap">
+      <view class="progress-track"><view class="progress-fill" style="width:{{progress}}%"></view></view>
+      <text class="muted">{{progress}}%</text>
+    </view>
+  </view>
+
+  <view class="timeline">
+    <block wx:for="{{groups}}" wx:key="mainId">
+      <view class="t-item {{item.isNow ? 'now' : ''}}">
+        <view class="t-card card {{item.isSection ? 'section' : ''}}">
+          <block wx:if="{{item.isSection}}">
+            <text class="section-title">{{item.sectionTitle}}</text>
+            <view wx:if="{{item.childCount}}" class="sub-toggle" bindtap="toggleSub" data-key="{{item.expandKey}}">
+              <text>{{item.subOpen ? '收起' : '展开'}} {{item.childCount}} 步</text>
+            </view>
+            <view wx:if="{{item.subOpen}}">
+              <view wx:for="{{item.children}}" wx:for-item="sub" wx:key="id" class="sub-row {{sub.isNow ? 'now' : ''}}">
+                <text class="sub-time">{{sub.time}}</text>
+                <text class="sub-act">{{sub.act}}</text>
+              </view>
+            </view>
+          </block>
+          <block wx:else>
+            <view class="t-top">
+              <text class="t-time">{{item.time}}</text>
+              <text class="tag" style="color:{{item.color}};background:{{item.color}}22">{{item.type}}</text>
+              <text wx:if="{{item.isNow}}" class="tag now">进行中</text>
+            </view>
+            <text class="t-title">{{item.act}}</text>
+            <text wx:if="{{item.loc}}" class="muted">📍 {{item.loc}}</text>
+            <text wx:if="{{item.detail}}" class="note">{{item.detail}}</text>
+            <view wx:if="{{item.hasMap}}" class="map-toggle" bindtap="openMap" data-from="{{item.from}}" data-to="{{item.to}}">
+              <text>🗺 路线地图</text>
+              <text class="muted">{{item.from}}{{item.to ? ' → ' + item.to : ''}}</text>
+            </view>
+            <view wx:if="{{item.childCount}}" class="sub-toggle" bindtap="toggleSub" data-key="{{item.expandKey}}">
+              <text>{{item.subOpen ? '收起' : '展开'}} {{item.childCount}} 子步骤</text>
+            </view>
+            <view wx:if="{{item.subOpen}}">
+              <view wx:for="{{item.children}}" wx:for-item="sub" wx:key="id" class="sub-row {{sub.isNow ? 'now' : ''}}">
+                <text class="sub-time">{{sub.time}}</text>
+                <text class="sub-act">{{sub.act}}</text>
+              </view>
+            </view>
+            <button size="mini" class="done-btn {{item.done ? 'done' : ''}}" bindtap="toggleDone" data-id="{{item.mainId}}">
+              {{item.done ? '✓ 已完成' : '标记完成'}}
+            </button>
+          </block>
+        </view>
+      </view>
+    </block>
+  </view>
+</view>
