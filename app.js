@@ -15,12 +15,16 @@ let currentDayIdx = 0;
 let manualRouteIdx = null;
 let doneSet = new Set(JSON.parse(localStorage.getItem('kl-done') || '[]'));
 let checklistSet = new Set(JSON.parse(localStorage.getItem('kl-checklist') || '[]'));
+let expandedSet = new Set(JSON.parse(localStorage.getItem('kl-expanded') || '[]'));
 
 function saveDone() {
   localStorage.setItem('kl-done', JSON.stringify([...doneSet]));
 }
 function saveChecklist() {
   localStorage.setItem('kl-checklist', JSON.stringify([...checklistSet]));
+}
+function saveExpanded() {
+  localStorage.setItem('kl-expanded', JSON.stringify([...expandedSet]));
 }
 
 function migrateChecklistStorage() {
@@ -167,6 +171,182 @@ function isSubItem(item) {
   return String(act).trim().startsWith('→');
 }
 
+function itemPriority(item) {
+  const v = item['显示'];
+  if (v == null || v === '') return 1;
+  return Number(v) || 1;
+}
+
+function expandKey(dayKey, idx) {
+  return `${dayKey}::${idx}`;
+}
+
+function shouldExpandGroup(dayKey, mainIdx, children, currentIdx) {
+  const key = expandKey(dayKey, mainIdx);
+  if (expandedSet.has(key)) return true;
+  if (currentIdx === mainIdx) return true;
+  return children.some((c) => c.i === currentIdx);
+}
+
+function groupTimelineItems(items) {
+  const groups = [];
+  let anchor = null;
+
+  items.forEach((item, i) => {
+    if (isDivider(item)) {
+      anchor = { kind: 'section', item, i, children: [] };
+      groups.push(anchor);
+      return;
+    }
+
+    const pri = itemPriority(item);
+    if (pri === 1) {
+      anchor = { kind: 'main', item, i, children: [] };
+      groups.push(anchor);
+      return;
+    }
+
+    if (anchor) anchor.children.push({ item, i });
+    else {
+      anchor = { kind: 'main', item, i, children: [] };
+      groups.push(anchor);
+    }
+  });
+
+  return groups;
+}
+
+function renderSubstepPreview(children, currentIdx) {
+  const lines = children.slice(0, 3);
+  const rest = children.length - lines.length;
+  const hiddenNow = children.some((c) => c.i === currentIdx)
+    && !lines.some((c) => c.i === currentIdx);
+
+  let html = '<div class="substeps-preview">';
+  if (hiddenNow) {
+    const nowChild = children.find((c) => c.i === currentIdx);
+    const r = getRow(nowChild.item);
+    html += `<div class="sub-preview-line now">
+      <span class="sub-preview-time">${esc(r.time)}</span>
+      <span>${esc(r.act)}</span>
+      <span class="sub-preview-tag">进行中</span>
+    </div>`;
+  }
+  lines.forEach(({ item, i }) => {
+    if (hiddenNow && i === currentIdx) return;
+    const r = getRow(item);
+    const isNow = i === currentIdx;
+    html += `<div class="sub-preview-line ${isNow ? 'now' : ''}">
+      <span class="sub-preview-time">${esc(r.time)}</span>
+      <span>${esc(r.act)}</span>
+      ${isNow ? '<span class="sub-preview-tag">进行中</span>' : ''}
+    </div>`;
+  });
+  if (rest > 0) {
+    html += `<div class="sub-preview-more">⋯ 另有 ${rest} 步，点击展开全部</div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderSubstepList(meta, children, currentIdx) {
+  return children.map(({ item, i }) => {
+    const r = getRow(item);
+    const isNow = i === currentIdx && document.getElementById('live-mode').checked;
+    const color = TYPE_COLORS[r.type] || '#64748b';
+    return `<div class="substep-row ${isNow ? 'now' : ''}" data-idx="${i}" id="item-${i}">
+      <div class="substep-marker" style="background:${color}"></div>
+      <div class="substep-body">
+        <div class="substep-head">
+          <span class="substep-time">${esc(r.time)}</span>
+          <span class="substep-type" style="color:${color}">${esc(r.type)}</span>
+          ${isNow ? '<span class="substep-now">进行中</span>' : ''}
+        </div>
+        <div class="substep-title">${esc(r.act)}</div>
+        ${r.loc ? `<div class="substep-loc">📍 ${esc(r.loc)}</div>` : ''}
+        ${r.detail ? `<div class="substep-note">${esc(r.detail)}</div>` : ''}
+        ${r.note ? `<div class="substep-note warn">⚠️ ${esc(r.note)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderSubstepsBlock(meta, mainIdx, children, currentIdx, label) {
+  if (!children.length) return '';
+  const key = expandKey(meta.key, mainIdx);
+  const open = shouldExpandGroup(meta.key, mainIdx, children, currentIdx);
+  const hasNowChild = children.some((c) => c.i === currentIdx);
+
+  return `<div class="substeps-block ${open ? 'is-open' : 'is-collapsed'} ${hasNowChild ? 'has-active' : ''}">
+    <button type="button" class="substeps-toggle" data-expand-key="${esc(key)}" aria-expanded="${open}">
+      <span class="substeps-badge">${children.length}</span>
+      <span class="substeps-label">${label}</span>
+      <span class="substeps-hint">${open ? '收起' : '展开全部'}</span>
+      <span class="substeps-chevron" aria-hidden="true">${open ? '▲' : '▼'}</span>
+    </button>
+    ${open
+      ? `<div class="substeps-list">${renderSubstepList(meta, children, currentIdx)}</div>`
+      : renderSubstepPreview(children, currentIdx)}
+  </div>`;
+}
+
+function renderTimelineItem(meta, item, i, items, currentIdx, { children = [], sectionTitle = null } = {}) {
+  const r = getRow(item);
+  const id = itemId(meta.key, i);
+  const done = doneSet.has(id);
+  const isNow = i === currentIdx && document.getElementById('live-mode').checked;
+  const isStar = (r.rec && String(r.rec).includes('★')) || (r.rec && String(r.rec).includes('必'));
+  const color = TYPE_COLORS[r.type] || '#64748b';
+  const isSection = !!sectionTitle;
+  const subLabel = isSection ? '路线细节' : '子步骤';
+  const childNow = children.some((c) => c.i === currentIdx);
+
+  return `<div class="t-item ${isNow || childNow ? 'now' : ''} ${done ? 'done' : ''} ${children.length ? 'has-children' : ''}" data-idx="${i}" id="item-${i}">
+    <div class="t-dot" style="border-color:${color}"></div>
+    <div class="t-card ${isStar ? 'highlight' : ''} ${children.length ? 'has-substeps' : ''} ${isSection ? 'is-section' : ''}">
+      ${isSection
+        ? `<div class="section-title">${esc(sectionTitle)}</div>`
+        : `<div class="t-top">
+        <span class="t-time">${esc(r.time)}</span>
+        <span class="t-badge" style="background:${color}22;color:${color}">${esc(r.type)}</span>
+        ${isNow ? '<span class="t-badge now-label">进行中</span>' : ''}
+        ${isStar ? '<span class="t-badge star">推荐</span>' : ''}
+      </div>
+      <div class="t-title">${esc(r.act)}</div>
+      ${r.loc ? `<div class="t-loc">📍 ${esc(r.loc)}</div>` : ''}
+      <div class="t-meta">
+        ${r.transport && r.transport !== '—' ? `<span>🚗 ${esc(r.transport)}</span>` : ''}
+        ${r.duration && r.duration !== '—' ? `<span>⏱ ${esc(r.duration)}</span>` : ''}
+        ${r.cost && r.cost !== '—' ? `<span>💰 ${esc(r.cost)}</span>` : ''}
+      </div>
+      ${r.detail ? `<div class="t-note">${esc(r.detail)}</div>` : ''}
+      ${r.note ? `<div class="t-note warn">⚠️ ${esc(r.note)}</div>` : ''}`}
+      ${renderSubstepsBlock(meta, i, children, currentIdx, subLabel)}
+      ${!isSection && window.TripCoords ? `<div class="coord-edit" data-idx="${i}">
+        <div class="coord-row">
+          ${coordSummary(meta.key, i, item, items)}
+          <button type="button" class="btn-sm coord-toggle">坐标</button>
+        </div>
+        <div class="coord-panel">
+          <div class="coord-fields">
+            <label>纬度 <input type="number" class="coord-lat" step="0.0001" placeholder="3.1490" /></label>
+            <label>经度 <input type="number" class="coord-lng" step="0.0001" placeholder="101.7128" /></label>
+          </div>
+          <div class="coord-actions">
+            <button type="button" class="btn-sm coord-copy-prev">同上</button>
+            <button type="button" class="btn-sm coord-copy-next">同下</button>
+            <button type="button" class="btn-sm coord-save">保存</button>
+            <button type="button" class="btn-sm coord-clear">清除</button>
+          </div>
+        </div>
+      </div>` : ''}
+      ${isSection ? '' : `<div class="t-actions">
+        <button class="btn-sm done-btn ${done ? 'is-done' : ''}" data-id="${id}">${done ? '✓ 已完成' : '标记完成'}</button>
+      </div>`}
+    </div>
+  </div>`;
+}
+
 function detectCurrentDay() {
   const ymd = klDateYmd();
   const idx = DAY_META.findIndex((d) => d.date === ymd);
@@ -235,6 +415,7 @@ function renderDayBar() {
     btn.addEventListener('click', () => {
       currentDayIdx = +btn.dataset.idx;
       manualRouteIdx = null;
+      window.__klUserScrolled = false;
       renderFlow();
       renderDayBar();
     });
@@ -255,72 +436,30 @@ function renderFlow() {
   document.getElementById('progress-text').textContent = progress + '%';
 
   const tl = document.getElementById('timeline');
+  const groups = groupTimelineItems(items);
   let html = '';
-  let actionIdx = 0;
 
-  items.forEach((item, i) => {
-    if (isDivider(item)) {
-      const act = item['活动/站点'] || item['活动/分区'] || '';
-      html += `<div class="t-divider">${esc(act.replace(/━/g, '').trim())}</div>`;
+  groups.forEach((group) => {
+    if (group.kind === 'section') {
+      const act = group.item['活动/站点'] || group.item['活动/分区'] || '';
+      const title = act.replace(/━/g, '').trim();
+      html += renderTimelineItem(meta, group.item, group.i, items, currentIdx, {
+        children: group.children,
+        sectionTitle: title,
+      });
       return;
     }
 
-    const r = getRow(item);
-    const id = itemId(meta.key, i);
-    const done = doneSet.has(id);
-    const isNow = i === currentIdx && document.getElementById('live-mode').checked;
-    const isStar = (r.rec && String(r.rec).includes('★')) || (r.rec && String(r.rec).includes('必'));
-    const sub = isSubItem(item);
-    const color = TYPE_COLORS[r.type] || '#64748b';
-
-    html += `<div class="t-item ${isNow ? 'now' : ''} ${done ? 'done' : ''} ${sub ? 'sub' : ''}" data-idx="${i}" id="item-${i}">
-      <div class="t-dot" style="border-color:${color}"></div>
-      <div class="t-card ${isStar ? 'highlight' : ''}">
-        <div class="t-top">
-          <span class="t-time">${esc(r.time)}</span>
-          <span class="t-badge" style="background:${color}22;color:${color}">${esc(r.type)}</span>
-          ${isNow ? '<span class="t-badge now-label">进行中</span>' : ''}
-          ${isStar ? '<span class="t-badge star">推荐</span>' : ''}
-        </div>
-        <div class="t-title">${esc(r.act)}</div>
-        ${r.loc ? `<div class="t-loc">📍 ${esc(r.loc)}</div>` : ''}
-        <div class="t-meta">
-          ${r.transport && r.transport !== '—' ? `<span>🚗 ${esc(r.transport)}</span>` : ''}
-          ${r.duration && r.duration !== '—' ? `<span>⏱ ${esc(r.duration)}</span>` : ''}
-          ${r.cost && r.cost !== '—' ? `<span>💰 ${esc(r.cost)}</span>` : ''}
-        </div>
-        ${r.detail ? `<div class="t-note">${esc(r.detail)}</div>` : ''}
-        ${r.note ? `<div class="t-note" style="opacity:0.85">⚠️ ${esc(r.note)}</div>` : ''}
-        <div class="coord-edit" data-idx="${i}">
-          <div class="coord-row">
-            ${coordSummary(meta.key, i, item, items)}
-            <button type="button" class="btn-sm coord-toggle">编辑坐标</button>
-          </div>
-          <div class="coord-panel">
-            <div class="coord-fields">
-              <label>纬度 <input type="number" class="coord-lat" step="0.0001" placeholder="3.1490" /></label>
-              <label>经度 <input type="number" class="coord-lng" step="0.0001" placeholder="101.7128" /></label>
-            </div>
-            <div class="coord-actions">
-              <button type="button" class="btn-sm coord-copy-prev">同上</button>
-              <button type="button" class="btn-sm coord-copy-next">同下</button>
-              <button type="button" class="btn-sm coord-save">保存</button>
-              <button type="button" class="btn-sm coord-clear">清除</button>
-            </div>
-          </div>
-        </div>
-        <div class="t-actions">
-          <button class="btn-sm done-btn ${done ? 'is-done' : ''}" data-id="${id}">${done ? '✓ 已完成' : '标记完成'}</button>
-        </div>
-      </div>
-    </div>`;
-    actionIdx++;
+    html += renderTimelineItem(meta, group.item, group.i, items, currentIdx, {
+      children: group.children,
+    });
   });
 
   tl.innerHTML = html;
 
   tl.querySelectorAll('.done-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const id = btn.dataset.id;
       if (doneSet.has(id)) doneSet.delete(id);
       else doneSet.add(id);
@@ -329,7 +468,29 @@ function renderFlow() {
     });
   });
 
-  if (currentIdx >= 0) {
+  tl.querySelectorAll('.substeps-toggle').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = btn.dataset.expandKey;
+      if (expandedSet.has(key)) expandedSet.delete(key);
+      else expandedSet.add(key);
+      saveExpanded();
+      renderFlow();
+    });
+  });
+
+  tl.querySelectorAll('.substeps-preview').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = el.closest('.substeps-block')?.querySelector('.substeps-toggle')?.dataset.expandKey;
+      if (!key || expandedSet.has(key)) return;
+      expandedSet.add(key);
+      saveExpanded();
+      renderFlow();
+    });
+  });
+
+  if (currentIdx >= 0 && !window.__klUserScrolled) {
     const el = document.getElementById(`item-${currentIdx}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
@@ -340,12 +501,14 @@ function renderFlow() {
   }
 
   bindCoordEditors(meta.key, items);
+  updateFab();
 
-  tl.querySelectorAll('.t-item').forEach((el) => {
-    el.style.cursor = 'pointer';
+  tl.querySelectorAll('.t-item, .substep-row').forEach((el) => {
     el.addEventListener('click', (e) => {
-      if (e.target.closest('.done-btn') || e.target.closest('.coord-edit')) return;
-      manualRouteIdx = +el.dataset.idx;
+      if (e.target.closest('.done-btn') || e.target.closest('.coord-edit') || e.target.closest('.substeps-toggle')) return;
+      const idx = el.dataset.idx;
+      if (idx == null) return;
+      manualRouteIdx = +idx;
       updateFlowRoute(items, manualRouteIdx, meta.key);
       el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
@@ -366,7 +529,7 @@ function renderOverview() {
 
 function renderFood() {
   const cols = ['日期', '餐次', '餐厅', '必点', '人均RM', '说明'];
-  document.getElementById('food-table').innerHTML = tableHtml(trip.foodDist, cols);
+  document.getElementById('food-table').innerHTML = tableResponsive(trip.foodDist, cols, { titleCol: '餐厅' });
 
   document.getElementById('restaurant-cards').innerHTML = trip.restaurants
     .filter((r) => r['安排日'] && !String(r['安排日']).includes('备选'))
@@ -381,12 +544,12 @@ function renderFood() {
   document.getElementById('food-rankings').innerHTML = (trip.foodRankings || [])
     .map((sec) => `
       <h4 class="rank-title">${esc(sec.title)}</h4>
-      <div class="table-wrap">${tableHtml(sec.items, rankCols)}</div>`).join('');
+      <div class="table-wrap">${tableResponsive(sec.items, rankCols, { titleCol: '餐厅' })}</div>`).join('');
 }
 
 function renderMap() {
   const cols = ['序号', '地点名称', '类型', '备注', '优先级', '安排日期', '时段'];
-  document.getElementById('map-table').innerHTML = tableHtml(trip.mapList, cols);
+  document.getElementById('map-table').innerHTML = tableResponsive(trip.mapList, cols, { titleCol: '地点名称' });
 }
 
 function renderBudget() {
@@ -417,7 +580,7 @@ function renderBudget() {
   `;
 
   const cols = ['日期', '类别', '项目', '说明', '预算(¥)', '实际支付(¥)', '可选'];
-  document.getElementById('budget-table').innerHTML = tableHtml(trip.budget, cols, { moneyCols: ['预算(¥)', '实际支付(¥)'] });
+  document.getElementById('budget-table').innerHTML = tableResponsive(trip.budget, cols, { moneyCols: ['预算(¥)', '实际支付(¥)'], titleCol: '项目' });
 
   renderFullBudget();
 }
@@ -445,7 +608,7 @@ function renderFullBudget() {
     </div>` : ''}`;
 
   const cols = ['分类', '项目', '说明', '预算(¥)', '实际支付(¥)', '可选', '状态'];
-  document.getElementById('full-budget-table').innerHTML = tableHtml(detailRows, cols, { moneyCols: ['预算(¥)', '实际支付(¥)'] });
+  document.getElementById('full-budget-table').innerHTML = tableResponsive(detailRows, cols, { moneyCols: ['预算(¥)', '实际支付(¥)'], titleCol: '项目' });
 }
 
 function fmtNum(n) {
@@ -516,6 +679,28 @@ function tableHtml(rows, cols, { moneyCols = [] } = {}) {
     </tbody></table>`;
 }
 
+function tableCell(col, val, moneyCols) {
+  if (moneyCols.includes(col)) {
+    return val == null || val === '' ? '—' : `¥ ${fmtNum(val)}`;
+  }
+  return esc(val ?? '—');
+}
+
+function tableResponsive(rows, cols, { moneyCols = [], titleCol } = {}) {
+  const titleKey = titleCol || cols.find((c) => ['项目', '餐厅', '地点名称'].includes(c)) || cols[0];
+  const desktop = tableHtml(rows, cols, { moneyCols });
+  const mobile = `<div class="mob-cards">${rows.map((r) => `
+    <article class="mob-card">
+      <div class="mob-card-title">${tableCell(titleKey, r[titleKey], moneyCols)}</div>
+      ${cols.filter((c) => c !== titleKey).map((c) => `
+        <div class="mob-row">
+          <span class="mob-k">${esc(c)}</span>
+          <span class="mob-v">${tableCell(c, r[c], moneyCols)}</span>
+        </div>`).join('')}
+    </article>`).join('')}</div>`;
+  return `<div class="table-responsive">${desktop}${mobile}</div>`;
+}
+
 function esc(s) {
   if (s == null) return '';
   return String(s)
@@ -525,18 +710,44 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
+function scrollToCurrentItem() {
+  const meta = DAY_META[currentDayIdx];
+  const items = trip?.days[meta.key] || [];
+  const { currentIdx } = getLiveStatus(meta.key, items);
+  if (currentIdx < 0) return;
+  const el = document.getElementById(`item-${currentIdx}`);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('flash-focus');
+    setTimeout(() => el.classList.remove('flash-focus'), 1200);
+  }
+}
+
+function updateFab() {
+  const fab = document.getElementById('fab-jump');
+  if (!fab) return;
+  const flowActive = document.getElementById('view-flow')?.classList.contains('active');
+  const live = document.getElementById('live-mode')?.checked;
+  const meta = DAY_META[currentDayIdx];
+  const items = trip?.days[meta.key] || [];
+  const { currentIdx } = getLiveStatus(meta.key, items);
+  fab.hidden = !(flowActive && live && currentIdx >= 0);
+}
+
 function switchView(view) {
   document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
   document.getElementById(`view-${view}`).classList.add('active');
-  document.querySelectorAll('.tab').forEach((t) => {
+  document.querySelectorAll('.nav-item').forEach((t) => {
     t.classList.toggle('active', t.dataset.view === view);
   });
+  localStorage.setItem('kl-view', view);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  updateFab();
   if (view === 'flow') {
     setTimeout(() => {
       const meta = DAY_META[currentDayIdx];
       const items = trip?.days[meta.key] || [];
       if (items.length && typeof updateFlowRoute === 'function') {
-        const meta = DAY_META[currentDayIdx];
         updateFlowRoute(items, manualRouteIdx ?? 0, meta.key);
       }
       if (typeof isMapOpen === 'function' && isMapOpen() && typeof invalidateFlowMap === 'function') {
@@ -579,12 +790,22 @@ async function init() {
   if (sub && trip.subtitle) sub.textContent = trip.subtitle;
   currentDayIdx = detectCurrentDay();
 
-  document.querySelectorAll('.tab').forEach((tab) => {
+  document.querySelectorAll('.nav-item').forEach((tab) => {
     tab.addEventListener('click', () => switchView(tab.dataset.view));
   });
 
+  document.getElementById('fab-jump')?.addEventListener('click', scrollToCurrentItem);
+
+  let scrollTimer;
+  window.addEventListener('scroll', () => {
+    window.__klUserScrolled = true;
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => { window.__klUserScrolled = false; }, 8000);
+  }, { passive: true });
+
   document.getElementById('live-mode').addEventListener('change', () => {
     manualRouteIdx = null;
+    window.__klUserScrolled = false;
     renderFlow();
     renderDayBar();
   });
@@ -598,6 +819,11 @@ async function init() {
   renderPrep();
   updateClock();
   setInterval(updateClock, 30000);
+
+  const savedView = localStorage.getItem('kl-view');
+  if (savedView && document.getElementById(`view-${savedView}`)) {
+    switchView(savedView);
+  }
 }
 
 init();

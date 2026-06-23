@@ -166,6 +166,36 @@ def export_merged_budget(ws):
     )
 
 
+def export_day_sheet(ws):
+    """Day sheets: column A = 显示 (1主/2次), headers from row 1 column B+."""
+    headers = []
+    for c in range(2, ws.max_column + 1):
+        h = ws.cell(1, c).value
+        if h:
+            headers.append((c, str(h).strip()))
+
+    rows = []
+    for r in range(2, ws.max_row + 1):
+        row = {}
+        display = ws.cell(r, 1).value
+        if display is not None and str(display).strip() != '':
+            row['显示'] = int(display) if isinstance(display, (int, float)) else display
+
+        empty = not row
+        for c, h in headers:
+            v = ws.cell(r, c).value
+            if v is not None and str(v).strip():
+                empty = False
+            row[h] = v
+
+        if empty:
+            continue
+        if '显示' not in row:
+            row['显示'] = 1
+        rows.append(row)
+    return rows
+
+
 def export_food_rankings(ws):
     sections = []
     current = None
@@ -229,7 +259,7 @@ def main():
     }
     for name in wb.sheetnames:
         if name.startswith('Day'):
-            out['days'][name.replace('Day', '').strip()] = sheet_to_dict(wb[name])
+            out['days'][name.replace('Day', '').strip()] = export_day_sheet(wb[name])
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(out, ensure_ascii=False, indent=2, default=str)
